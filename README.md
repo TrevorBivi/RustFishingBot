@@ -1,1 +1,10 @@
 # RustFishingBot
+A bot to fish in a standard indoor fishing area
+![20220520020600_1](https://user-images.githubusercontent.com/30152653/169465124-543cc168-dd50-48b6-9f4c-ba7646627296.jpg)
+
+## TODO
+  - only gut necessary fish according to fish/scrap value
+  - work during nighttime
+  - access at least 1 large box to depo, get new rods, eat and drink
+  - humanize inputs
+  - optimize yeild (latest average estimate: 2231 scrap/hour)
