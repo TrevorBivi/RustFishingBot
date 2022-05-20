@@ -9,4 +9,4 @@ Currently supporting 1080p at quality 0 and 1440p at quality 2
   - work during nighttime
   - access at least 1 large box to depo, get new rods, eat and drink
   - humanize inputs
-  - optimize yeild (latest average estimate: 2231 scrap/hour)
+  - optimize yeild (latest sea base average estimate: 2231 scrap/hour)
