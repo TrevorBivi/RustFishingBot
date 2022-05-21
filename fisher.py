@@ -4,6 +4,7 @@ import time as t
 from settings import *
 from basicHelpers import *
 from fishingHelpers import *
+from humanInput import *
 
 pag.PAUSE = 0
 
@@ -32,51 +33,21 @@ class Fisher(object):
         self.ry = 0
         self.dx = 0
         self.dy = 0
+        self.brightness = 1.0
 
-    def rotate(self, rx, ry):
-        dbg('@rotate')
-        desired = rx
-        original = self.rx
-        new_x = self.rx + rx
-        if new_x > MAX_ROT:
-            rx = MAX_ROT - self.rx
-        elif new_x < MIN_ROT:
-            rx = MIN_ROT + self.rx
-        actual = rx
-        slept = False
-        while rx > self.var['MSPEED']:
-            rx -= self.var['MSPEED']
-            cx = int(self.var['MSPEED']  * SENSITIVITY)
-            self.dx += cx
-            wm_mouse_move(cx,0)
-            slept = True
-            #print('loop pos', rx)
-            t.sleep(1/90)
-            
-        while rx < -self.var['MSPEED']:
-            rx += self.var['MSPEED']
-            cx = int(-self.var['MSPEED']  * SENSITIVITY)
-            self.dx += cx
-            wm_mouse_move(cx,0)
-            slept = True
-            #print('loop neg', rx)
-            t.sleep(1/90)
+        self.fishing_left = False
+        self.first_rot = None
 
-        cx = int(rx * SENSITIVITY)
-        self.dx += cx
-        self.rx = self.dx / SENSITIVITY
-        #print('final', rx)
-        wm_mouse_move(cx,0)
-        #print('original', original, 'des dx', desired, ' (to ', new_x, ') actual', actual, ' new',self.rx) 
-        dbg('% rotate  - slept' + str(slept))
+        self.mouse = Mouse()
         
-    def rotate_to(self, rx, ry):
-        dbg('@rotate_to')
-        dt = t.time()
-        dx = rx - self.rx
-        dy = ry - self.ry
-        self.rotate(dx,dy)
-        dbg('% rotate_to')
+    def rotate_to(self, rx, ry, speed=1):
+        dbg('@rotate_to',1)
+        #dt = t.time()
+        dx = round(min(max(rx, MIN_ROT), MAX_ROT))
+        dy = round(min(max(ry, MIN_ROT), MAX_ROT))
+        #self.rotate(dx,dy)
+        self.mouse.rotate_to(round(dx*SENSITIVITY),round(dy*SENSITIVITY),speed)
+        dbg('% rotate_to',1)
         
     def reset_rotation(self):
         dbg('@rest_rotation')
@@ -113,14 +84,14 @@ class Fisher(object):
         dbg('%switch_keys')
 
     def desired_keys(self):
-        print('~~desired_keys')
+        #print('~~desired_keys')
         return ['s','d']
         pos = self.get_bobber_estimate()
         if pos[1] < i_y(self.var['NEARPLAYER'])  or abs(pos[0] - SCREEN_SIZE[0] / 2) < i_x(self.var['CENTERWIDTH']):
             return ['s']
         else:
             keys = []
-            if abs(pos[0] - SCREEN_SIZE[0] / 2) < i_x(self.var['DIAGONALWIDTH']):
+            if abs(pos[0] - SCREEN_SIZEsdsd[0] / 2) < i_x(self.var['DIAGONALWIDTH']):
                 keys.append('s')
                 
             if pos[0] - SCREEN_SIZE[0] / 2 > 0:
@@ -133,13 +104,15 @@ class Fisher(object):
         dbg('@handle_cast')
         if not im:
             im = iGrab.grab()
-            
+        im.save('dbg/wat' + str(t.time()) + '.png')
         self.reset_rotation()
+        self.mouse.play_thread.join()
         self.heat = 0
         self.cooling = False
+        self.brightness = get_brightness(im)
        
-        if active_rod(im) == None:
-            pressSlot(inactive_rod(im))
+        if self.active_rod(im) == None:
+            pressSlot(self.inactive_rod(im))
 
         if not 'right' in self.buttons:
             self.add_button('right')
@@ -149,8 +122,13 @@ class Fisher(object):
         t.sleep(g(0.2))
         self.rm_button('left')
         t.sleep(1)
-        self.rotate_to(35,0)
+        
+        self.first_rot = g(35)
+        self.rotate_to(self.first_rot,0)
         t.sleep(g(2))
+        if self.first_rot < 35:
+            self.rotate_to(g(40))
+
         self.switch_keys(['s','d'])
         dbg('%handle_cast')
 
@@ -176,6 +154,15 @@ class Fisher(object):
                 dbg('%handle_pull - event')
                 return event
         
+        def is_rod(px):
+            chan_max = lerp(self.brightness, LINE_BRIGHTNESS_CURVE)
+            if px[0] <= chan_max and px[1] <= chan_max and px[2] <= chan_max:
+                return True
+        
+        if self.brightness < 0.0:
+            dbg('%handle pull - skipped')
+            return None
+        
         start_time = t.time()
         while t.time() - start_time < self.var['MAXWAIT']:
             im = iGrab.grab()
@@ -187,7 +174,8 @@ class Fisher(object):
                 for y in range(PULLING_TL[1], PULLING_BR[1], PULLING_SCAN_SPEED):
                     px = im.getpixel((x,y))
                     
-                    if px[0] > px[1] > px[2]:
+                    if is_rod(px):
+                        print('HOOKED')
                         self.switch_keys(['s','d'])
                         for time_length in (self.var['FIRST_PULL_TIME'], self.var['FIRST_COOL_TIME']):
                             test_time = t.time()
@@ -211,16 +199,20 @@ class Fisher(object):
         dbg('@fish_left')
         if im == None:
             im = iGrab.grab()
-            
+        old_fishing_left = self.fishing_left
         def handle_rotation():
-            self.rotate_to(-10,0)
+            if self.fishing_left and not old_fishing_left:
+                self.rotate_to(-10,0)
+            elif not self.fishing_left and old_fishing_left:
+                self.rotate_to(50, 0, (self.rx - MIN_ROT) / (MAX_ROT / MIN_ROT) )
         
         def is_line(x,y):
             px = im.getpixel((x,y))
-            if px[0] < 95 and px[1] < 95 and px[2] < 95:
+            if px[0] < 95 * self.brightness and px[1] < 95 * self.brightness and px[2]  < 95 * self.brightness:
                 return True
 
-        wall_r = (self.rx - self.var['MIN_ROT']) / (self.var['MAX_ROT'] - self.var['MIN_ROT'])
+        
+        wall_r = (self.mouse.vx.value / SENSITIVITY - self.var['MIN_ROT']) / (self.var['MAX_ROT'] - self.var['MIN_ROT'])
         wall_pos = (
             FISH_LEFT_WALL_MIN[0] + wall_r * (FISH_LEFT_WALL_MAX[0]-FISH_LEFT_WALL_MIN[0]),
             FISH_LEFT_WALL_MIN[1] + wall_r * (FISH_LEFT_WALL_MAX[1]-FISH_LEFT_WALL_MIN[1]))
@@ -236,11 +228,16 @@ class Fisher(object):
             if is_line(x, y):
                 im.putpixel((x,y), (255,0,0))
                 self.switch_keys(['d'])
-                handle_rotation()
-                dbg('%fish_left - true')
-                return True
+                
+                
+                self.fishing_left = True
+                
+                break
             im.putpixel((x,y), (0,0,255))
-        dbg('%fish_left - false')
+        self.fishing_left = False
+        handle_rotation()
+        dbg('%fish_left - ' +str(self.fishing_left))
+        return self.fishing_left
         #im.show()
 
     def update_actions(self, last_action_time):
@@ -268,13 +265,15 @@ class Fisher(object):
     def event_check(self, im=None):
         dbg('@event_check')
         def rod_snapped():
+            chan_max = lerp(self.brightness, LINE_BRIGHTNESS_CURVE)
             for x in range(RAISED_ROD_TL[0], RAISED_ROD_BR[0], RAISED_ROD_SPEED):
                 for y in range(RAISED_ROD_TL[1], RAISED_ROD_BR[1], RAISED_ROD_SPEED):
                     #print('raised rod check',x,y, px)
                     px = im.getpixel((x,y))
                     #print('raised rod check',x,y, px)
                     im.putpixel((x,y), (0,255,0))
-                    if dist(px, (0,0,0)) < 80:
+
+                    if px[0] < chan_max and px[1] < chan_max and px[2] < chan_max:
                         im.putpixel((x,y), (0,0,255))
                         return 'SNAP'
             return None
@@ -283,7 +282,7 @@ class Fisher(object):
             im = iGrab.grab()
 
         if got_pickup(im): # success
-            other_rod = inactive_rod(im)
+            other_rod = self.inactive_rod(im)
             if other_rod != None:
                 print('select second rod')
                 t.sleep(g(0,0.2))
@@ -306,24 +305,30 @@ class Fisher(object):
         last_time = start_time
         new_time = start_time
         last_ims = []
+        iters = 0
         while not event or new_time - start_time > self.var['MAXWAIT']:
             last_time = new_time
             new_time = t.time()
             time_change = new_time - last_time
-            dbg('* fight loop -  last time change' +  str(time_change), 1)
+            dbg('* fight loop -  last time change' +  str(time_change) + ' bright' + str(self.brightness), 0 )
             
             im = iGrab.grab()
-            if not self.fish_left(im):
-                self.rotate(1,0)
+            was_fishing_left = self.fishing_left
+            self.fish_left(im)
+
             self.update_actions(time_change)
-            event = self.event_check(im)
+            if iters % 3 == 0:
+                event = self.event_check(im)
+                self.brightness = get_brightness(im)
+            
             last_ims.append(im)
             last_ims = last_ims[-110:]
+            iters += 1
             #t.sleep(max(0,self.var['SCANTIME'] - time_change))
             #print('sleeping', max(0,self.var['SCANTIME'] - time_change))
         if event == 'SNAP':
             dbg('# save snap pics')
-            for i, snap_im in enumerate(last_ims[:25]):
+            for i, snap_im in enumerate(last_ims[-1:]):
                 snap_im.save('dbg\\' + str(new_time) + '_' + str(i) + '.png')
 
         dbg('%handle_fight')
@@ -387,6 +392,7 @@ class Fisher(object):
                 
             self.rm_button('right')
             self.switch_keys([])
+            self.mouse.play_thread.join()
             loop_sum = manage_inventory()
             pag.press('space')
             t.sleep(g(0.6))
@@ -406,3 +412,67 @@ class Fisher(object):
             
         self.reset_rotation()
         return total_fish
+
+    def slot_state(self, i, im=None):
+        pos = slot_pos(i,0)
+        print('pos',i,pos)
+        full = al(pos, FULL_OFFSET)
+        health = al(pos, HP_OFFSET)
+        selected1 = al(
+            pos,
+            (HP_OFFSET[0] * 3, SLOT_SIZE - (HP_OFFSET[0] * 3))
+        )
+        selected2 = al(
+            pos,
+            (SLOT_SIZE - (HP_OFFSET[0] * 3), HP_OFFSET[0] * 3)
+        )
+        print(full,health, selected1, selected2)
+        
+        if not im:
+            im = iGrab.grab()
+
+        x,y = health
+        w=HP_OFFSET[0]
+        hasHealth = False
+        for xi in range(x-w,x+w):
+            for yi in range(y-3*w,y-w):
+                px = im.getpixel((xi,yi))
+                if dist(px,(115,140,68)) < 15:
+                    
+                    hasHealth = True
+                    break
+        px = im.getpixel(full)
+        isFull = dist(px,(227,227,227)) < 30
+        
+        px1 = im.getpixel(selected1)
+        px2 = im.getpixel(selected2)
+        selected_color = (
+            SELECTED_MIN[0] + self.brightness * (SELECTED_MAX[0] - SELECTED_MIN[0]),
+            SELECTED_MIN[1] + self.brightness * (SELECTED_MAX[1] - SELECTED_MIN[1]),
+            SELECTED_MIN[2] + self.brightness * (SELECTED_MAX[2] - SELECTED_MIN[2]),
+        )
+        isSelected = dist(px1,selected_color) < 30 and dist(px2,selected_color) < 30
+        print(hasHealth, isFull, isSelected)
+        return hasHealth, isFull, isSelected
+
+    def inactive_rod(self, im):
+        if not im:
+            im = iGrab.grab()
+        for i in range(6):
+            ss = self.slot_state(i)
+            if ss[0] and ss[1] and not ss[2]:
+                return i
+
+    def active_rod(self, im):
+        if not im:
+            im = iGrab.grab()
+        for i in range(6):
+            ss = self.slot_state(i)
+            if ss[0] and ss[1] and ss[2]:
+                return i
+
+if __name__ == "__main__":
+    print('running fisher...')
+    t.sleep(3)
+    f = Fisher()
+    f.run()

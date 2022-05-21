@@ -8,5 +8,5 @@ Currently supporting 1080p at quality 0 and 1440p at quality 2
   - only gut necessary fish according to fish/scrap value
   - work during nighttime
   - access at least 1 large box to depo, get new rods, eat and drink
-  - humanize inputs
+  - further humanize inputs
   - optimize yeild (latest sea base average estimate: 2231 scrap/hour)

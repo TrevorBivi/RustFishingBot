@@ -1,13 +1,7 @@
 from settings import *
 
-
-import win32
-import win32api
-import win32con
-import win32gui
 import ctypes
-import random as r
-import pyautogui as pag
+
 import cv2
 import numpy as np
 from PIL import ImageGrab as iGrab
@@ -61,11 +55,14 @@ def g(mn,mx=None,dev=None):
         mx = 2 * mn
     return mn
 
-def dist(rgb1,rgb2):
-    return sum([(rgb1[i] - rgb2[i])**2 for i in range(len(rgb1))]) ** 0.5
+def sdist(rgb1, rgb2 = (0,0,0)):
+    return sum([(rgb1[i] - rgb2[i])**2 for i in range(len(rgb1))])
+
+def dist(rgb1,rgb2 = (0,0,0)):
+    return sdist(rgb1, rgb2) ** 0.5
 
 def get_template(name):
-    print('rust\\' + IMG_PATH + '\\' +name)
+    #print('rust\\' + IMG_PATH + '\\' +name)
     ret = cv2.imread('rust\\' + IMG_PATH + '\\' +name,cv2.IMREAD_COLOR)
     assert( type(ret) == np.ndarray)
     return ret

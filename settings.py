@@ -9,7 +9,26 @@ MIN_ROT = -10
 
 DBG_DEPTH = 1
 
+FULL_BRIGHT = 138 + 5 #(76,79,84)
+FULL_DARK = 0
+
+LINE_BRIGHTNESS = 80
+
+LINE_CHANNEL_INTENSITY = 60
+
+SELECTED_MIN = (23,92,140)
+SELECTED_MAX = (74,113,153)
+
 dbg_time = t.time()
+
+LINE_BRIGHTNESS_CURVE = [
+    (0.23, 0),
+    #(0.245, 1+2),
+    (0.414, 4+1.5),
+    (0.513, 7+2.5),
+    (0.757, 19+6),
+    (0.893, 33+13),
+]
 
 def dbg(msg, depth=0):
     global dbg_time
@@ -37,8 +56,8 @@ if SCREEN_SIZE == P1440:
     HP_OFFSET = 4, 128
     FULL_OFFSET = 16,12
 
-    PULLING_TL = 1940, 840
-    PULLING_BR = 2000, 900
+    PULLING_TL = 1940-39, 840-15
+    PULLING_BR = 2000-30, 900-15
     PULLING_SCAN_SPEED = 7
     
     FISH_LEFT_PLAYER = (1139,1439)
@@ -50,6 +69,14 @@ if SCREEN_SIZE == P1440:
     RAISED_ROD_TL = 2450,645
     RAISED_ROD_BR = 2560,824
     RAISED_ROD_SPEED = 12
+
+    #NIGHT+R
+
+    BRIGHTNESS_TL = 1700,70
+    BRIGHTNESS_BR = 2560,400
+    BRIGHTNESS_SPEED = 60
+
+
 
     #FISH_RIGHT_LINE_START
 
