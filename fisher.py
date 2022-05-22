@@ -1,6 +1,6 @@
 import time as t
 #from scipy.stats import linregress
-
+from PIL import ImageDraw
 from settings import *
 from basicHelpers import *
 from fishingHelpers import *
@@ -104,8 +104,8 @@ class Fisher(object):
         dbg('@handle_cast')
         if not im:
             im = iGrab.grab()
-        im.save('dbg/wat' + str(t.time()) + '.png')
-        self.reset_rotation()
+        #im.save('dbg/wat' + str(t.time()) + '.png')
+        self.rotate_to(0,0)
         self.mouse.play_thread.join()
         self.heat = 0
         self.cooling = False
@@ -123,11 +123,10 @@ class Fisher(object):
         self.rm_button('left')
         t.sleep(1)
         
-        self.first_rot = g(35)
-        self.rotate_to(self.first_rot,0)
+        self.rotate_to(g(20),20,)
         t.sleep(g(2))
-        if self.first_rot < 35:
-            self.rotate_to(g(40))
+        #if self.first_rot < 35:
+        #    self.rotate_to(g(40))
 
         self.switch_keys(['s','d'])
         dbg('%handle_cast')
@@ -159,7 +158,8 @@ class Fisher(object):
             if px[0] <= chan_max and px[1] <= chan_max and px[2] <= chan_max:
                 return True
         
-        if self.brightness < 0.0:
+        if self.brightness < 0.4:
+            print('SKIPPING PULL\n;lllllllllllllll\nlllllllllllll')
             dbg('%handle pull - skipped')
             return None
         
@@ -182,7 +182,7 @@ class Fisher(object):
                             event = None
                             while t.time() - test_time < time_length and not event:
                                 im = iGrab.grab()
-                                self.fish_left(im)
+                                self.handle_angle_correction(im)
                                 event = handle_event(im)
                                 if event:
                                     dbg('%handle_pull - event3')
@@ -195,48 +195,63 @@ class Fisher(object):
         dbg('%handle_pull - maxwait')
         return None
     
-    def fish_left(self,im=None):
-        dbg('@fish_left')
+    def handle_angle_correction(self,im=None):
+        dbg('@handle_angle_correction')
         if im == None:
             im = iGrab.grab()
         old_fishing_left = self.fishing_left
         def handle_rotation():
             if self.fishing_left and not old_fishing_left:
+                print('ROTTEATE LEFT!!!!')
                 self.rotate_to(-10,0)
             elif not self.fishing_left and old_fishing_left:
-                self.rotate_to(50, 0, (self.rx - MIN_ROT) / (MAX_ROT / MIN_ROT) )
-        
+                print('ROTTEATE RIGH    T!!!!')
+                self.rotate_to(50, 0, 0.34 )
+            #else:
+                #print('no action', self.brightness)
         def is_line(x,y):
             px = im.getpixel((x,y))
             if px[0] < 95 * self.brightness and px[1] < 95 * self.brightness and px[2]  < 95 * self.brightness:
                 return True
 
-        
-        wall_r = (self.mouse.vx.value / SENSITIVITY - self.var['MIN_ROT']) / (self.var['MAX_ROT'] - self.var['MIN_ROT'])
-        wall_pos = (
-            FISH_LEFT_WALL_MIN[0] + wall_r * (FISH_LEFT_WALL_MAX[0]-FISH_LEFT_WALL_MIN[0]),
-            FISH_LEFT_WALL_MIN[1] + wall_r * (FISH_LEFT_WALL_MAX[1]-FISH_LEFT_WALL_MIN[1]))
-        #wall_pos = FISH_LEFT_WALL_MIN
-        scan_line = Line(wall_pos, FISH_LEFT_PLAYER)
+
         hot_pos = slot_pos(0,0)
+        
+        rot = (m.radians(self.mouse.vy.value / SENSITIVITY),m.radians(self.mouse.vx.value / SENSITIVITY),0)
+        #pp1 = weak_proj(FISH_LEFT_P1, (m.degrees(rot[0]), m.degrees(rot[1])))  # persp_proj(FISH_LEFT_P1, rot )  
+        pp1 = persp_proj(FISH_LEFT_P1, rot)  # persp_proj(FISH_LEFT_P1, rot )  
+        #pp2 = weak_proj(FISH_LEFT_P2, (m.degrees(rot[0]), m.degrees(rot[1])))  # persp_proj(FISH_LEFT_P1, rot )  
+        pp2 = persp_proj(FISH_LEFT_P2, rot)  # persp_proj(FISH_LEFT_P1, rot )  
+        scan_line = Line(pp1, pp2)
+        
+        #draw = ImageDraw.Draw(im)
+        #draw.line((pp2, pp1), fill=(250,0,0))
+        #print('ppppppppppppp', pp1,pp2)
+        #im.save('dbg/ppp' + str(t.time()) + '.png')
+        #print('FI33334555555555555555553333SH LEFT')
         #print(scan_line.p1, scan_line.p2)
-        for y in range(int(scan_line.p1[1]), int(scan_line.p2[1])):
+        self.fishing_left = False
+        for y in range(int(scan_line.p1[1]), min(int(scan_line.p2[1]), SCREEN_SIZE[1])):
             x = int(scan_line.f(y))
+            if not (0 < x <= SCREEN_SIZE[0]):
+                continue    
             if hot_pos[1] < y < hot_pos[1] + SLOT_SIZE:
                 continue
-            
+            #print('check line', x,y)
             if is_line(x, y):
-                im.putpixel((x,y), (255,0,0))
+                #im.putpixel((x,y), (255,0,0))
                 self.switch_keys(['d'])
                 
                 
                 self.fishing_left = True
                 
                 break
-            im.putpixel((x,y), (0,0,255))
-        self.fishing_left = False
+            #im.putpixel((x,y), (0,0,255))
+        
         handle_rotation()
-        dbg('%fish_left - ' +str(self.fishing_left))
+        #im.save('dbg/asdas' + str(t.time()) + '.png')
+        
+        dbg('%handle_angle_correction - ' +str(self.fishing_left))
         return self.fishing_left
         #im.show()
 
@@ -277,6 +292,19 @@ class Fisher(object):
                         im.putpixel((x,y), (0,0,255))
                         return 'SNAP'
             return None
+        
+        BOBBER_PASS_G_CHAN = lerp(self.brightness, [(0,18-4), (1, 36-5)] )
+        BOBBER_PASS_B_CHAN = lerp(self.brightness,[(0,31-4), (1,57-5)])
+        BOBBER_FAIL_R_CHAN = lerp(self.brightness,[(0,33-4), (1,56-5)])
+
+        def rod_snapped_night():
+            for x in range (BOBBER_HOLO_TL[0], BOBBER_HOLO_BR[0], BOBBER_HOLO_SPEED):
+                for y in range (BOBBER_HOLO_TL[1], BOBBER_HOLO_BR[1], BOBBER_HOLO_SPEED):
+                    px = im.getpixel((x,y))
+                    if px[0] > BOBBER_FAIL_R_CHAN and px[0] > px[2] * 4:
+                        return 'SNAP'
+                    elif px[2] > BOBBER_PASS_B_CHAN and px[1] > BOBBER_PASS_G_CHAN and px[1] > px[0] * 4:
+                        return 'SNAP'
 
         if not im:
             im = iGrab.grab()
@@ -293,7 +321,11 @@ class Fisher(object):
             else:
                 dbg('%event_check - success')
                 return 'SUCCESS'
-        ret = rod_snapped()
+        if self.brightness > 0.4:
+            #print('NIGHT SNAP\n;lllllllllllllll\nlllllllllllll')
+            ret =  rod_snapped()
+        else:
+            ret = rod_snapped_night()
         dbg('%event_check - rodsnapped=' + str(ret))
         return ret
 
@@ -306,6 +338,7 @@ class Fisher(object):
         new_time = start_time
         last_ims = []
         iters = 0
+
         while not event or new_time - start_time > self.var['MAXWAIT']:
             last_time = new_time
             new_time = t.time()
@@ -314,16 +347,18 @@ class Fisher(object):
             
             im = iGrab.grab()
             was_fishing_left = self.fishing_left
-            self.fish_left(im)
+            self.handle_angle_correction(im)
 
             self.update_actions(time_change)
             if iters % 3 == 0:
                 event = self.event_check(im)
                 self.brightness = get_brightness(im)
             
-            last_ims.append(im)
-            last_ims = last_ims[-110:]
+            #last_ims.append(im)
+            #last_ims = last_ims[-110:]
             iters += 1
+            if iters % 4 == 0:
+                print('iter time', time_change)
             #t.sleep(max(0,self.var['SCANTIME'] - time_change))
             #print('sleeping', max(0,self.var['SCANTIME'] - time_change))
         if event == 'SNAP':
@@ -335,6 +370,8 @@ class Fisher(object):
         return event
 
     def fish(self):
+        print('FI33333333SH LEFT')
+        self.handle_angle_correction()
         print('### cast')
         self.handle_cast()
         print('### pull wait')

@@ -15,8 +15,7 @@ from PIL import Image, ImageDraw
 #im.show()
 
 rr = 0
-PLAYER = (0,1.5,0)
-rotation = (0,radians(30),0)
+
 FAR_LEFT = (-2.3, 0, 6.1)
 FAR_RIGHT = ( 0.5, 0 , 6.1)
 NEAR_LEFT = (-2.3, 0, 0.1)
@@ -27,13 +26,13 @@ NEAR_RIGHT = (0.5, 0, 0.1)
 #NEAR_LEFT = (-0.5, 0, 5.1)
 #NEAR_RIGHT = (0.5, 0, 5.1)
 
-SCREEN_SIZE = 256,144
+SCREEN_SIZE = 2560,1440
 #SCREEN_SIZE[0]/4
 FOV = 90
+PLAYER = (0,1.5,0)
+rotation = (0,radians(30),0)
 display_surface = (SCREEN_SIZE[0]/2,SCREEN_SIZE[1]/2, FOV/2 )# (SCREEN_SIZE[0]/2,SCREEN_SIZE[1]/2, 1) #SCREEN_SIZE[0] / FOV
-
-
-def persp_proj(pnt, player=PLAYER, rotation=rotation, e=display_surface):
+def persp_proj(pnt, rotation=rotation, player=PLAYER, e=display_surface):
     
     # a =  #(6.5,-1.5,-2.5)
     a = pnt

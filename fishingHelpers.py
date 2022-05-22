@@ -32,7 +32,7 @@ templates = {
 'fat': get_template('fat.png'),
 'pistolbullet': get_template('pistolbullet.png'),
 'bone': get_template('bone.png'),
-}
+}'''
 
 
 def slot_pos(x,y):

@@ -9,6 +9,8 @@ import numpy as np
 import time as t
 import json
 
+import threading, queue
+
 if __name__ == '__main__':
     import keyboard
 
@@ -98,7 +100,26 @@ def rotate(item, vx, vy):
     vy.value += y
 
 
-def play_thread_func(action, vx, vy):
+def play_thread_func(q, vx, vy):
+    using = None
+    start_time = None
+    while True:
+        try:
+            using = q.get(block=False)
+            start_time = t.time()
+        except queue.Empty:
+            if using and len(using):
+                next_item = using[0]
+                new_time = t.time()
+                if new_time - start_time > next_item[2]:
+                    start_time = new_time
+                    using.pop(0)
+                    rotate(next_item, vx, vy)
+            else:
+                return
+        t.sleep(0.005)
+
+'''
     action_time = 0
     items = action
     while len(items):
@@ -111,7 +132,7 @@ def play_thread_func(action, vx, vy):
         while action_time > new_time-start_time:
             #print(action_time, new_time-start_time)
             new_time = t.time()
-        rotate(item, vx, vy)
+        rotate(item, vx, vy)'''
 
 
 class Mouse(object):
@@ -120,8 +141,10 @@ class Mouse(object):
         self.vy = Value('i', 0)
         self.play_thread = None
 
-        #TODO
         self.performing = []
+        #TODO
+        self.action_queue = queue.Queue()
+
 
 
     def choose_action(self, x,y, method, variety=3):
@@ -207,10 +230,12 @@ class Mouse(object):
 
 
     def play(self, action):
-        if self.play_thread:
-            self.play_thread.terminate()
-        self.play_thread = Process(target=play_thread_func, args=(action, self.vx, self.vy))
-        self.play_thread.start()
+        t1 = t.time()
+        self.action_queue.put(action)
+        if not self.play_thread or not self.play_thread.is_alive():
+            self.play_thread = threading.Thread(target=play_thread_func, daemon=True, args=(self.action_queue, self.vx, self.vy))
+            self.play_thread.start()
+        print('PLAY TIME', t.time()-t1)
     
             
     
@@ -264,16 +289,21 @@ def record_action_list(path):
 if __name__ == '__main__':
     mm = Mouse()
     t.sleep(1)
-    print(pag.position())
-    for i in range(10):
-        print(mm.vx.value)
-        mm.rotate_to(100,10,1)
-        t.sleep(0.3)
-        mm.rotate_to(0,0,1)
-        #mm.rotate_to(0,0,1)
-        t.sleep(0.3)
-    mm.play_thread.join()
-    print(pag.position())
+    t1 = t.time()
+    mm.rotate_to(100,10,1)
+    t.sleep(0.3)
+    print('VXVY',mm.vx, mm.vy)
+    t.sleep(0.7)
+    print('VXVY',mm.vx, mm.vy)
+    t.sleep(2)
+
+    mm.rotate_to(-100,-10,1)
+    t.sleep(0.3)
+    print('VXVY',mm.vx, mm.vy)
+    t.sleep(0.7)
+    print('VXVY',mm.vx, mm.vy)
+    t.sleep(2)
+
 '''
 ACTION_BLENDING = 0.3
 def destination(action):
