@@ -4,7 +4,7 @@ SCREEN_SIZE = P1440
 SENSITIVITY = 9.5
 assert (SCREEN_SIZE in [P1080, P1440])
 import time as t
-MAX_ROT = 50
+MAX_ROT = 40
 MIN_ROT = -10
 
 DBG_DEPTH = 1

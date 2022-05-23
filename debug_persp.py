@@ -36,8 +36,17 @@ while True:
     window.fill((0,0,0))
     if new:
         
-        pp1 = persp_proj( FAR_LEFT, (angle_x, angle_y, angle_z))
-        pp2 = persp_proj(FAR_RIGHT,(angle_x, angle_y, angle_z))
+        FISH_LEFT_P1 = [ -2.5 * m.sin( 3.14 * 0.25), 0, 2.5 * m.cos( 3.14 * 0.25)  ]
+        FISH_LEFT_P2 = [ -0.5 * m.sin( 3.14 * 0.25), 0, 0.5 * m.cos( 3.14 * 0.25)  ]
+
+        rot = (angle_x, angle_y, angle_z)#m.radians(self.mouse.vx.value / SENSITIVITY),0)
+        #pp1 = weak_proj(FISH_LEFT_P1, (m.degrees(rot[0]), m.degrees(rot[1])))  # persp_proj(FISH_LEFT_P1, rot )  
+        pp1 = persp_proj(FISH_LEFT_P1, rot)  # persp_proj(FISH_LEFT_P1, rot )  
+        #pp2 = weak_proj(FISH_LEFT_P2, (m.degrees(rot[0]), m.degrees(rot[1])))  # persp_proj(FISH_LEFT_P1, rot )  
+        pp2 = persp_proj(FISH_LEFT_P2, rot)  # persp_proj(FISH_LEFT_P1, rot )  
+
+        #pp1 = persp_proj( FAR_LEFT,)
+        #pp2 = persp_proj(FAR_RIGHT,(angle_x, angle_y, angle_z))
 
         pygame.draw.circle(window, (0,0,255), pp1, 5)
         pygame.draw.circle(window, (0,0,255), pp2, 5)

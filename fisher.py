@@ -1,6 +1,6 @@
 import time as t
 #from scipy.stats import linregress
-from PIL import ImageDraw
+from PIL import ImageDraw, Image
 from settings import *
 from basicHelpers import *
 from fishingHelpers import *
@@ -203,7 +203,7 @@ class Fisher(object):
         def handle_rotation():
             if self.fishing_left and not old_fishing_left:
                 print('ROTTEATE LEFT!!!!')
-                self.rotate_to(-10,0)
+                self.rotate_to(-10,0,0.04)
             elif not self.fishing_left and old_fishing_left:
                 print('ROTTEATE RIGH    T!!!!')
                 self.rotate_to(50, 0, 0.34 )
@@ -211,23 +211,35 @@ class Fisher(object):
                 #print('no action', self.brightness)
         def is_line(x,y):
             px = im.getpixel((x,y))
-            if px[0] < 95 * self.brightness and px[1] < 95 * self.brightness and px[2]  < 95 * self.brightness:
+            chan_max = 95 * self.brightness + 2
+            if px[0] <= chan_max and px[1] <= chan_max and px[2]  <= chan_max:
                 return True
 
 
         hot_pos = slot_pos(0,0)
         
-        rot = (m.radians(self.mouse.vy.value / SENSITIVITY),m.radians(self.mouse.vx.value / SENSITIVITY),0)
+        
+
+        scan_len = min(6, abs( 0.8 /  m.sin( m.radians(20.9) - m.radians(self.mouse.vx.value / SENSITIVITY) )))
+        
+
+        FISH_LEFT_P2 = [ -0.3 * m.sin( 3.14 * 0.20), 0, 0.5 * m.cos( 3.14 * 0.20)  ]
+        #FISH_LEFT_P1 = [ -2.25, 0,  ]
+        rot = (m.radians(self.mouse.vy.value / SENSITIVITY) * 1,m.radians(self.mouse.vx.value / SENSITIVITY),0)#,0)
+
+        snap_rot = rot[0], rot[1] - 60, rot[0]
+
+        z_dist = 2.5 / m.tan(snap_rot[1])
+        FISH_LEFT_P1 = [ -2.5, 0, z_dist ]
+
+
         #pp1 = weak_proj(FISH_LEFT_P1, (m.degrees(rot[0]), m.degrees(rot[1])))  # persp_proj(FISH_LEFT_P1, rot )  
         pp1 = persp_proj(FISH_LEFT_P1, rot)  # persp_proj(FISH_LEFT_P1, rot )  
         #pp2 = weak_proj(FISH_LEFT_P2, (m.degrees(rot[0]), m.degrees(rot[1])))  # persp_proj(FISH_LEFT_P1, rot )  
         pp2 = persp_proj(FISH_LEFT_P2, rot)  # persp_proj(FISH_LEFT_P1, rot )  
         scan_line = Line(pp1, pp2)
         
-        #draw = ImageDraw.Draw(im)
-        #draw.line((pp2, pp1), fill=(250,0,0))
-        #print('ppppppppppppp', pp1,pp2)
-        #im.save('dbg/ppp' + str(t.time()) + '.png')
+
         #print('FI33334555555555555555553333SH LEFT')
         #print(scan_line.p1, scan_line.p2)
         self.fishing_left = False
@@ -235,22 +247,62 @@ class Fisher(object):
             x = int(scan_line.f(y))
             if not (0 < x <= SCREEN_SIZE[0]):
                 continue    
-            if hot_pos[1] < y < hot_pos[1] + SLOT_SIZE:
+            if hot_pos[1] < y < hot_pos[1] + SLOT_SIZE and hot_pos[0] < x < hot_pos[0] + SLOT_SIZE * 6:
                 continue
-            #print('check line', x,y)
+
             if is_line(x, y):
                 #im.putpixel((x,y), (255,0,0))
                 self.switch_keys(['d'])
-                
-                
+                #im.putpixel((x+1,y+1), (255,255,0))
+                #im.putpixel((x+1,y), (255,255,0))
+                #im.putpixel((x,y+1), (255,255,0))
+                #im.putpixel((x,y), (255,255,0))
+                #im.putpixel((x+2,y+1), (255,255,0))
+                #im.putpixel((x+2,y), (255,255,0))
+                #im.putpixel((x+3,y+1), (255,255,0))
+                #im.putpixel((x+3,y), (255,255,0))
                 self.fishing_left = True
-                
-                break
-            #im.putpixel((x,y), (0,0,255))
+                im.putpixel((x-1,y), (255,0,0))
+                im.putpixel((x+1,y), (255,0,0))
+                im.putpixel((x+4,y), (255,0,0))
+                im.putpixel((x+5,y), (255,0,0))
+                im.putpixel((x+6,y), (255,0,0))
+                #break
+            b=0
+            px = im.getpixel((x,y))
+            chan_max = 95 * self.brightness + 2
+            if px[0] <= chan_max:
+                b += 1
+            if  px[1] <= chan_max:
+                b += 2
+            if  px[2] <= chan_max:
+                b += 4
+            if chan_max >= 2:
+                b += 8
+            if is_line(x,y):
+                b += 16
+
+            #print('check line', x,y)
+            if self.fishing_left:
+                im.putpixel((x,y), (0,255,b))
+            else:
+                im.putpixel((x,y), (255,0,b))
+            
         
         handle_rotation()
+        #draw = ImageDraw.Draw(im)
+        #draw.line((pp2, pp1), fill=(250,0,0))
+        #print('ppppppppppppp', pp1,pp2)
+
+        #im = im.crop((0,720,2560/2,1440))
+        #im = im.convert('L')
+        #im.thumbnail( (2560//4,1440//2) , Image.NEAREST)
+        if self.fishing_left:
+            im.save('dbg/fff' + str(t.time()) + '.png')
+        else:
+            im.save('dbg/ggggg' + str(t.time()) + '.png')
         #im.save('dbg/asdas' + str(t.time()) + '.png')
-        
+        #sprint('FISHLEFT',self.fishing_left, 95 * self.brightness + 2, )
         dbg('%handle_angle_correction - ' +str(self.fishing_left))
         return self.fishing_left
         #im.show()

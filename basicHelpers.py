@@ -104,7 +104,7 @@ def match_template(template, im=None,min_match=-1, box=None,error=False):
     return match[3],match[1]
 
 
-FISH_LEFT_P1 = (-1.6, 0, 2.3)#(-2.3, 0, 6.1)
+#FISH_LEFT_P1 = (-1.6, 0, 2.3)#(-2.3, 0, 6.1)
 FISH_LEFT_P2 = (-0.3, 0, 0.5)#(0.3, 0, 6.1)
 
 FOV = 90
@@ -116,7 +116,7 @@ def persp_proj(pnt, rotation=rotation, player=PLAYER, e=display_surface):
     # a =  #(6.5,-1.5,-2.5)
     a = pnt
     c = player
-    th = rotation[0]+ m.radians(17.3) , rotation[1]- 1*m.radians(20.9) ,0 
+    th = rotation[0]+ m.radians(17.3) , rotation[1]- 1*m.radians(20.9),0#rotation[1]- 1*m.radians(20.9) ,0 
 
     def c_(i):
         return m.cos(th[i])
