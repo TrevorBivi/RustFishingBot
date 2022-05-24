@@ -45,7 +45,7 @@ class Action(object):
         dest = destination(items) 
         self.destination = dest
             
-def get_actions(path='whip_accurate_movements.txt'):
+def get_actions(path='whip_movements.txt'):
     actions = []
     with open(path,'r') as file:
         data = file.read()
@@ -59,8 +59,8 @@ def get_actions(path='whip_accurate_movements.txt'):
                     actions.append(a)
     return actions
 
-AFTER_CAST_ACTIONS = get_actions('after_cast_1.txt')
-DRAG_ACTIONS = get_actions('after_cast_1.txt')
+WHIP_ACTIONS = get_actions('whip_movements.txt')
+NORMAL_ACTIONS = get_actions('normal_movements.txt')
 
 
 def test2(speed):
@@ -103,21 +103,29 @@ def rotate(item, vx, vy):
 def play_thread_func(q, vx, vy):
     using = None
     start_time = None
+    strings = ''
     while True:
         try:
             using = q.get(block=False)
             start_time = t.time()
         except queue.Empty:
             if using and len(using):
-                next_item = using[0]
                 new_time = t.time()
-                if new_time - start_time > next_item[2]:
-                    start_time = new_time
-                    using.pop(0)
+                next_item = using[0]
+                strings += '\n> ' + str(new_time) + '_' + str(start_time) + '==' + str(new_time- start_time) + str( next_item)
+                
+                while new_time - start_time >= next_item[2] and using and len(using):
+                    del using[0]
+                    start_time += next_item[2]
                     rotate(next_item, vx, vy)
+                    if len(using) == 0:
+                        return
+                    next_item = using[0]
+
             else:
+                print('STRINGS\n' + strings)
                 return
-        t.sleep(0.005)
+        #t.sleep(0.005)
 
 '''
     action_time = 0
@@ -142,7 +150,7 @@ class Mouse(object):
         self.play_thread = None
 
         self.performing = []
-        #TODO
+
         self.action_queue = queue.Queue()
 
 
@@ -151,11 +159,17 @@ class Mouse(object):
         bests = []
         dists = []
         for i,action in enumerate(method):
-            new_dist = sdist(destination(action.items)[:2], (x,y))
-            #print('scan method', new_dist, [dists], len(bests))
+            action_best = 999999999
+            for sx in range(-1,2,2):
+                for sy in range(-1,2,2):
+                    dest_xy = destination(action.items)[0] * sx, destination(action.items)[1] * sy
+                    new_dist = sdist(dest_xy, (x,y))
+                    if new_dist < action_best:
+                        action_best = new_dist
+                    
             for i in range(min(variety, len(bests))):
-                if new_dist < dists[i]:
-                    dists.insert(i,new_dist)
+                if action_best < dists[i]:
+                    dists.insert(i,action_best)
                     bests.insert(i,action)
                     dists = dists[:variety]
                     bests = bests[:variety]
@@ -169,7 +183,9 @@ class Mouse(object):
         return bests[chosen]
 
     
-    def rotate_to(self, x,y, speed, method=AFTER_CAST_ACTIONS):
+    def rotate_to(self, x,y, speed, method=WHIP_ACTIONS):
+        if self.vx.value == x and self.vy.value == y and (self.play_thread and not self.play_thread.is_alive()):
+            return
         it = 0
         start_pos = [self.vx.value, self.vy.value]
         #print('start = ', start_pos)
@@ -195,6 +211,7 @@ class Mouse(object):
         
         xscale = (rx)/act.destination[0]
         yscale = (ry)/act.destination[1]
+        
         tscale = speed/act.destination[2]
         
         
@@ -222,7 +239,10 @@ class Mouse(object):
         
         #print(self.performing,'\n\n\n', scaled_items)
 
-        self.play(sorted(self.performing + scaled_items, key=get_key))
+
+        print('INFO',act.destination, speed, destination(scaled_items))
+        
+        self.play(scaled_items) #sorted(self.performing + , key=get_key)
         print('CHOSE',t2-t1,t3-t2, t3-t.time() )
         #self.performing = 
             
@@ -230,6 +250,7 @@ class Mouse(object):
 
 
     def play(self, action):
+        print('playing', len(action), destination(action))
         t1 = t.time()
         self.action_queue.put(action)
         if not self.play_thread or not self.play_thread.is_alive():
@@ -239,17 +260,16 @@ class Mouse(object):
     
             
     
-def record_action_list(path):
+def record_action_list(path='temp.txt'):
     pos = pag.position()
     while True:
-
-        while not keyboard.is_pressed('t'):
-            pass
+        t.sleep(0.1)
         moves = []
         last_time = None
         start_pos = pag.position()
         print('Press R to start waiting for an action')
-
+        while not keyboard.is_pressed('r'):
+            pass
         print('waiting for an action from', start_pos)
         while last_time == None or t.time() - last_time < 0.1:
             
@@ -258,7 +278,7 @@ def record_action_list(path):
             if new_pos[0] == start_pos[0] and new_pos[1] == start_pos[1]:
 
                 continue
-            print('last', last_time, new_pos, start_pos)
+            #print('last', last_time, new_pos, start_pos)
             new_time = t.time()
             if last_time == None:
                 passed = 0
@@ -273,36 +293,53 @@ def record_action_list(path):
         print('DONE', dest)
         print('test play action: press T, save action: press y/n')
         
-        yy = keyboard.is_pressed('y')
-        nn = keyboard.is_pressed('n')
+        yy = False
+        nn = False
         while not (yy or nn):
             yy = keyboard.is_pressed('y')
             nn = keyboard.is_pressed('n')
-            pass
+            tt = keyboard.is_pressed('t')
+            if tt:
+                print(moves)
+                dupe = Action(moves[:])
+                m = Mouse()
+                print()
+                m.play(dupe.items)
+                print('playing...')
+                m.play_thread.join()
+                print('done')
+            elif nn:
+                moves = []
+
+        if yy:
+            
+            print('wait done')
+            data = json.dumps( moves )
+            print(data)
+            with open(path, 'a+') as file:
+                file.write(data + '\n')
         
-        print('wait done')
-        data = json.dumps( moves )
-        print(data)
-        with open(path, 'a+') as file:
-            file.write(data + '\n')
+rr = record_action_list
 
 if __name__ == '__main__':
     mm = Mouse()
     t.sleep(1)
     t1 = t.time()
-    mm.rotate_to(100,10,1)
-    t.sleep(0.3)
+    mm.rotate_to(100,10,0.1)
+    mm.play_thread.join()
+    print('time',t.time()-t1)
+    #t.sleep(0.3)
     print('VXVY',mm.vx, mm.vy)
-    t.sleep(0.7)
-    print('VXVY',mm.vx, mm.vy)
-    t.sleep(2)
+    #t.sleep(0.7)
+    #print('VXVY',mm.vx, mm.vy)
+    #t.sleep(1)
 
-    mm.rotate_to(-100,-10,1)
+    '''mm.rotate_to(-100,-10,1)
     t.sleep(0.3)
     print('VXVY',mm.vx, mm.vy)
     t.sleep(0.7)
     print('VXVY',mm.vx, mm.vy)
-    t.sleep(2)
+    t.sleep(2)'''
 
 '''
 ACTION_BLENDING = 0.3

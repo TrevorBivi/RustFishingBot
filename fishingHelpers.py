@@ -32,6 +32,7 @@ templates = {
 'fat': get_template('fat.png'),
 'pistolbullet': get_template('pistolbullet.png'),
 'bone': get_template('bone.png'),
+'fullrod': get_template('fullrod.png')
 }
 
 
@@ -43,6 +44,17 @@ def slot_pos(x,y):
         ry = BP_POS[1] + SLOT_SIZE * (4-y)
         rx = BP_POS[0] + SLOT_SIZE * x
     return rx, ry
+'''
+def get_chest_rod(im):
+    if im == None:
+        im = iGrab.grab()
+    
+    for x in range(CHEST_TL[0], CHEST_TL[0]+CHEST_SLOT_SIZE * 6, CHEST_SLOT_SIZE):
+        for y in range(CHEST_TL[1], CHEST_TL[1]+CHEST_SLOT_SIZE * 6, CHEST_SLOT_SIZE):
+            for xi in range(-2,3):
+                for yi in range(-2,3):
+                    hpxl = im.getpixel((x+HP_OFFSET[0], y+CHEST_SLOT_SIZE))
+                    rpxl = im.getpixel((x+HP_OFFSET[0], y+CHEST_SLOT_SIZE))'''
 
 def slot_state(i, im=None, brightness = None):
     pos = slot_pos(i,0)
@@ -240,7 +252,7 @@ def get_player_stats(im=None, iters=4):
     for s in range(3):
         percent = 0.5
         for i in range(2,iters+2):
-            px = im.getpixel((int(PLAYER_BAR_LEFT + percent * PLAYER_BAR_WIDTH), PLAYER_HP_HEIGHT))
+            px = im.getpixel((int(  PLAYER_BAR_LEFT + percent * PLAYER_BAR_WIDTH), PLAYER_HP_HEIGHT))
             for c in range(3):
                 if not (colors[i][0][c] <= px[c] <= colors[i][1][c]):
                     percent -= 0.5 ** i
@@ -250,21 +262,76 @@ def get_player_stats(im=None, iters=4):
         stats.append(percent)
     return stats
 
-def deposit_items():
+def open_box():
     MIN_Y = 4
-    im = iGrab.grab()
+    pag.keyDown('e')
+    t.sleep(g(0.08))
+    pag.keyUp('e')
+    t.sleep(1)
+
+    for i in range(10):
+        im = iGrab.grab()
+        pxl = im.getpixel(CHEST_TEXT_VERIFY)
+        if dist(pxl, CHEST_TEXT_COL) < 20:
+            return im
+        t.sleep(0.2)
+
+    return False
+
+def deposit_items(im=None):
+    tl = slot_pos(0, 4)
+    br = al(slot_pos(6, 0), (SLOT_SIZE, SLOT_SIZE))
+    inv_box = tl[0], tl[1], br[0], br[1]
+    if im == None:
+        im = iGrab.grab()
+
+
     inv_box = None
-    for fsh in fish_templates[3:]:
-        fsh_pos = match_template(fsh, im, 0.98, inv_box)
-        while fsh_pos:
-            pag.moveTo(fsh_pos[0])
-            t.sleep(g(0.15))
-            pag.mouseDown(button='right')
-            t.sleep(g(0.05))
-            pag.mouseUp(button='right')
-            t.sleep(g(0.15))
-            im = iGrab.grab()
+    old_pos = None
+    clicked = True
+    last_clicks = []
+    for i in range(10):
+        new_clicks = []
+        for fsh in fish_names[3:]:
             fsh_pos = match_template(fsh, im, 0.98, inv_box)
+            if fsh_pos:
+                if any([dist(p, fsh_pos[0]) < SLOT_SIZE / 2 for p in last_clicks ]):
+                    return False
+                new_clicks.append(fsh_pos[0])
+                pag.moveTo(fsh_pos[0])
+                t.sleep(g(0.15))
+                pag.mouseDown(button='right')
+                t.sleep(g(0.05))
+                pag.mouseUp(button='right')
+                t.sleep(g(0.15))
+                im = iGrab.grab()
+                fsh_pos = match_template(fsh, im, 0.98, inv_box)
+        if len(new_clicks):
+            last_clicks = new_clicks
+            t.sleep(1)
+            im = iGrab.grab()
+        else:
+            return True
+    return False
+
+def replenish_rods(im=None):
+    if im == None:
+        im = iGrab.grab()
+    states = [slot_state(i) for i in range(6)]
+    chest_box = CHEST_TL[0], CHEST_TL[1], CHEST_TL[0] + CHEST_SLOT_SIZE * 7, CHEST_TL[0] + CHEST_SLOT_SIZE * 6
+
+    for i, state in enumerate(states):
+        if not state[0]:
+            rod_pos = match_template(templates['fullrod'], im, 0.98, chest_box)
+            if rod_pos:
+                pag.moveTo(al(slot_pos(i), (SLOT_SIZE//2, SLOT_SIZE//2) ))
+                t.sleep(g(0.1))
+                pag.mouseDown()
+                t.sleep(g(0.1))
+                pag.moveTo(al(rod_pos[0], (20,0)))
+                t.sleep(0.1)
+                pag.mouseUp()
+
 
 def get_brightness(im=None):
     if im == None:
@@ -272,7 +339,7 @@ def get_brightness(im=None):
 
     BRIGHTNESS_TL = 1700,70
     BRIGHTNESS_BR = 2560,400
-    BRIGHTNESS_SPEED = 60
+    BRIGHTNESS_SPEED = 45
     br = 0
     bg = 0
     bb = 0
@@ -290,7 +357,7 @@ def get_brightness(im=None):
         return 1.0
     else:
         ret = bdist / FULL_BRIGHT
-        return ret
+        return ret - 0.0021
 
 def lerp(x, pts):
     if x < pts[0][0]:

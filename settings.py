@@ -43,16 +43,6 @@ def dbg(msg, depth=0):
         print('(',new_time - dbg_time, ') ', msg)
         dbg_time = new_time
 
-class Line(object):
-    def __init__(self, p1, p2):
-        self.p1 = p1
-        self.p2 = p2
-        self.m = (p2[0] - p1[0]) / (p2[1] - p1[1])
-        self.b = p1[0] - self.m * p1[1]
-
-    def f(self,x):
-        return int(self.m * x + self.b)
-
 if SCREEN_SIZE == P1440:
     
     BP_POS = 882,762
@@ -61,6 +51,11 @@ if SCREEN_SIZE == P1440:
     IMG_PATH = '1440p_quality2'
     HP_OFFSET = 4, 128
     FULL_OFFSET = 16,12
+
+    CHEST_TL = 1677,608
+    CHEST_SLOT_SIZE = 124
+    CHEST_ROD_POS = 61,33
+    CHEST_ROD_COL = 180, 167,147
 
     PULLING_TL = 1940-39, 840-15
     PULLING_BR = 2000-30, 900-15
@@ -96,6 +91,9 @@ if SCREEN_SIZE == P1440:
     
     STATUS_0_POS = (2447, 1217)
     STATUS_HEIGHT = 56
+
+    CHEST_TEXT_VERIFY = (1742,510)
+    CHEST_TEXT_COL = (232,221,211)
     
 else:
     BP_POS = 660, 573

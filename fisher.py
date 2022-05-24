@@ -36,6 +36,7 @@ class Fisher(object):
         self.brightness = 1.0
 
         self.fishing_left = False
+        self.fishing_left_time = None
         self.first_rot = None
 
         self.mouse = Mouse()
@@ -158,7 +159,7 @@ class Fisher(object):
             if px[0] <= chan_max and px[1] <= chan_max and px[2] <= chan_max:
                 return True
         
-        if self.brightness < 0.4:
+        if self.brightness < 0.045:
             print('SKIPPING PULL\n;lllllllllllllll\nlllllllllllll')
             dbg('%handle pull - skipped')
             return None
@@ -187,7 +188,7 @@ class Fisher(object):
                                 if event:
                                     dbg('%handle_pull - event3')
                                     return event
-                                t.sleep(self.var['SCANTIME'])
+                                #t.sleep(self.var['SCANTIME'])
                                 
                             self.switch_keys([])
                         dbg('%handle_pull - pulled')
@@ -195,23 +196,33 @@ class Fisher(object):
         dbg('%handle_pull - maxwait')
         return None
     
-    def handle_angle_correction(self,im=None):
+    def handle_angle_correction(self,im=None, vx = None, vy = None):
         dbg('@handle_angle_correction')
+        debug = False
+        if self.fishing_left_time and t.time() - self.fishing_left_time < 2:
+            dbg('%handle_angle_correction - time skip')
+            return True
+        if vx == None:
+            vx = self.mouse.vx.value
+        if vy == None:
+            vy = self.mouse.vy.value
+
         if im == None:
             im = iGrab.grab()
         old_fishing_left = self.fishing_left
         def handle_rotation():
             if self.fishing_left and not old_fishing_left:
                 print('ROTTEATE LEFT!!!!')
-                self.rotate_to(-10,0,0.04)
+                #self.switch_keys(['d'])
+                self.rotate_to(-10,0,0.2)
             elif not self.fishing_left and old_fishing_left:
                 print('ROTTEATE RIGH    T!!!!')
-                self.rotate_to(50, 0, 0.34 )
+                self.rotate_to(50, 0, 3 )
             #else:
                 #print('no action', self.brightness)
         def is_line(x,y):
             px = im.getpixel((x,y))
-            chan_max = 95 * self.brightness + 2
+            chan_max = 95 * self.brightness + 0
             if px[0] <= chan_max and px[1] <= chan_max and px[2]  <= chan_max:
                 return True
 
@@ -223,36 +234,56 @@ class Fisher(object):
         scan_len = min(6, abs( 0.8 /  m.sin( m.radians(20.9) - m.radians(self.mouse.vx.value / SENSITIVITY) )))
         
 
-        FISH_LEFT_P2 = [ -0.3 * m.sin( 3.14 * 0.20), 0, 0.5 * m.cos( 3.14 * 0.20)  ]
+        FISH_LEFT_P2 = [ -0.3 , 0, 0.5 ]
         #FISH_LEFT_P1 = [ -2.25, 0,  ]
-        rot = (m.radians(self.mouse.vy.value / SENSITIVITY) * 1,m.radians(self.mouse.vx.value / SENSITIVITY),0)#,0)
-
-        snap_rot = rot[0], rot[1] - 60, rot[0]
-
-        z_dist = 2.5 / m.tan(snap_rot[1])
-        FISH_LEFT_P1 = [ -2.5, 0, z_dist ]
+        rot = (m.radians(vy / SENSITIVITY) * 1,m.radians(vx / SENSITIVITY),0)#,0)
+        #print('left rot',)
+        #rot = (0.0, -0.17453292519943295, 0)
+        snap_rot = rot[0], rot[1] - m.radians(50), rot[0]
 
 
+        z_dist = 2.4 / max(0.001, abs( m.tan(snap_rot[1])) )
+        #print('zdist', z_dist)
+        FISH_LEFT_P1 = [ -2.4, -0.8, min(z_dist, 6.7) ]
+
+        FISH_LEFT_P2 = [ m.sin(snap_rot[1] - m.radians(20.5)) ,-0.8   ,m.cos(snap_rot[1] - m.radians(20.5)) ]
+
+        #FISH_LEFT_P1 = [-2.3, 0, 6]
+        #FISH_LEFT_P2     = [0.5, 0, 6]
+          #2.3 2.4
+        
         #pp1 = weak_proj(FISH_LEFT_P1, (m.degrees(rot[0]), m.degrees(rot[1])))  # persp_proj(FISH_LEFT_P1, rot )  
         pp1 = persp_proj(FISH_LEFT_P1, rot)  # persp_proj(FISH_LEFT_P1, rot )  
         #pp2 = weak_proj(FISH_LEFT_P2, (m.degrees(rot[0]), m.degrees(rot[1])))  # persp_proj(FISH_LEFT_P1, rot )  
         pp2 = persp_proj(FISH_LEFT_P2, rot)  # persp_proj(FISH_LEFT_P1, rot )  
-        scan_line = Line(pp1, pp2)
-        
 
-        #print('FI33334555555555555555553333SH LEFT')
+        if pp1[1] > pp2[1]:
+            scan_line = Line(pp2,pp1)
+        else:
+            #print('aa',pp1,pp2)
+            scan_line = Line(pp1,pp2)
+        scan_iter = scan_line.get_iter()
+        #print('P1', pp1, 'P2', pp2)
+        #print('rot' + str(rot) + 'MIN MAX' + str(scan_iter.min) + ', ' + str(scan_iter.max))
+
+        #prin   t('FI33334555555555555555553333SH LEFT')
         #print(scan_line.p1, scan_line.p2)
         self.fishing_left = False
-        for y in range(int(scan_line.p1[1]), min(int(scan_line.p2[1]), SCREEN_SIZE[1])):
-            x = int(scan_line.f(y))
-            if not (0 < x <= SCREEN_SIZE[0]):
-                continue    
+
+        for x,y in scan_iter:
+            #print('ITER',x,y)
             if hot_pos[1] < y < hot_pos[1] + SLOT_SIZE and hot_pos[0] < x < hot_pos[0] + SLOT_SIZE * 6:
                 continue
 
             if is_line(x, y):
-                #im.putpixel((x,y), (255,0,0))
-                self.switch_keys(['d'])
+                self.fishing_left_time = t.time()
+
+                #if debug:
+                    #im.putpixel((x+2,y+1), (255,0,255))
+                    #im.putpixel((x+3,y+1), (255,0,255))
+                    #im.putpixel((x+2,y+1), (255,0,255))
+                    #im.putpixel((x+3,y+1), (255,0,255))
+                
                 #im.putpixel((x+1,y+1), (255,255,0))
                 #im.putpixel((x+1,y), (255,255,0))
                 #im.putpixel((x,y+1), (255,255,0))
@@ -262,11 +293,11 @@ class Fisher(object):
                 #im.putpixel((x+3,y+1), (255,255,0))
                 #im.putpixel((x+3,y), (255,255,0))
                 self.fishing_left = True
-                im.putpixel((x-1,y), (255,0,0))
+                '''im.putpixel((x-1,y), (255,0,0))
                 im.putpixel((x+1,y), (255,0,0))
                 im.putpixel((x+4,y), (255,0,0))
                 im.putpixel((x+5,y), (255,0,0))
-                im.putpixel((x+6,y), (255,0,0))
+                im.putpixel((x+6,y), (255,0,0))'''
                 #break
             b=0
             px = im.getpixel((x,y))
@@ -281,12 +312,12 @@ class Fisher(object):
                 b += 8
             if is_line(x,y):
                 b += 16
-
             #print('check line', x,y)
-            if self.fishing_left:
-                im.putpixel((x,y), (0,255,b))
-            else:
-                im.putpixel((x,y), (255,0,b))
+            if debug:
+                if self.fishing_left:
+                    im.putpixel((x,y), (0,255,0))
+                else:
+                    im.putpixel((x,y), (0,0,255))
             
         
         handle_rotation()
@@ -296,11 +327,15 @@ class Fisher(object):
 
         #im = im.crop((0,720,2560/2,1440))
         #im = im.convert('L')
-        #im.thumbnail( (2560//4,1440//2) , Image.NEAREST)
-        if self.fishing_left:
-            im.save('dbg/fff' + str(t.time()) + '.png')
-        else:
-            im.save('dbg/ggggg' + str(t.time()) + '.png')
+        if debug: #self.fishing_left:
+            #im = im.crop((0,1440//3,2560//2,1440))
+            im = im.crop((0,0,2560,1440))
+            im.thumbnail( (2560//6,1440//6  ) , Image.NEAREST)
+            if self.fishing_left:
+                im.save('dbg/fff' + str(t.time()) + '.png')
+            else:
+                im.save('dbg/ggggg' + str(t.time()) + '.png')
+
         #im.save('dbg/asdas' + str(t.time()) + '.png')
         #sprint('FISHLEFT',self.fishing_left, 95 * self.brightness + 2, )
         dbg('%handle_angle_correction - ' +str(self.fishing_left))
@@ -332,7 +367,8 @@ class Fisher(object):
     def event_check(self, im=None):
         dbg('@event_check')
         def rod_snapped():
-            chan_max = lerp(self.brightness, LINE_BRIGHTNESS_CURVE)
+            chan_max = lerp(self.brightness, LINE_BRIGHTNESS_CURVE)+1
+            #print('rod max', chan_max)
             for x in range(RAISED_ROD_TL[0], RAISED_ROD_BR[0], RAISED_ROD_SPEED):
                 for y in range(RAISED_ROD_TL[1], RAISED_ROD_BR[1], RAISED_ROD_SPEED):
                     #print('raised rod check',x,y, px)
@@ -340,7 +376,7 @@ class Fisher(object):
                     #print('raised rod check',x,y, px)
                     im.putpixel((x,y), (0,255,0))
 
-                    if px[0] < chan_max and px[1] < chan_max and px[2] < chan_max:
+                    if px[0] <= chan_max and px[1] <= chan_max and px[2] <= chan_max:
                         im.putpixel((x,y), (0,0,255))
                         return 'SNAP'
             return None
@@ -373,7 +409,7 @@ class Fisher(object):
             else:
                 dbg('%event_check - success')
                 return 'SUCCESS'
-        if self.brightness > 0.4:
+        if self.brightness > 0.045:
             #print('NIGHT SNAP\n;lllllllllllllll\nlllllllllllll')
             ret =  rod_snapped()
         else:
@@ -397,9 +433,10 @@ class Fisher(object):
             time_change = new_time - last_time
             dbg('* fight loop -  last time change' +  str(time_change) + ' bright' + str(self.brightness), 0 )
             
+            vx = self.mouse.vx.value
+            vy = self.mouse.vy.value
             im = iGrab.grab()
-            was_fishing_left = self.fishing_left
-            self.handle_angle_correction(im)
+            self.handle_angle_correction(im, vx, vy)
 
             self.update_actions(time_change)
             if iters % 3 == 0:
@@ -494,7 +531,7 @@ class Fisher(object):
 
             log_time = t.time()
             passed = log_time - start_time
-            log_data = {'type': 'ITER','id':run_id, 'average':total_score / passed, 'new average':new_score/passed, 'score': total_score, 'new score': new_score, 'snaps':snaps, 'timeouts':timeouts, 'catches':catches, 'unknowns':unknowns, 'fish':total_fish} 
+            log_data = {'type': 'ITER','id':run_id, 'average':total_score / passed, 'score': total_score, 'new score': new_score, 'snaps':snaps, 'timeouts':timeouts, 'catches':catches, 'unknowns':unknowns, 'fish':total_fish} 
             log(str(log_data))
             print('done loop')
             new_time = t.time()
@@ -562,6 +599,17 @@ class Fisher(object):
 
 if __name__ == "__main__":
     print('running fisher...')
-    t.sleep(3)
-    f = Fisher()
-    f.run()
+    if 0:
+        f = Fisher()
+    else:
+        t.sleep(3)
+        f = Fisher()
+        f.run()
+
+def showr(rx,ry,w=3):
+    t.sleep(w)
+    f.rotate_to(rx,ry)
+    f.mouse.play_thread.join()
+    f.handle_angle_correction()
+    f.mouse.play_thread.join()
+    print('DONE')

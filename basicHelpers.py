@@ -7,15 +7,64 @@ import numpy as np
 from PIL import ImageGrab as iGrab
 import math as m
 
+class LineIter(object):
+    def __init__(self, p1, p2, min_x = 0, max_x = SCREEN_SIZE[0], min_y = 0, max_y = SCREEN_SIZE[1]):
+        self.line = Line(p1,p2)
+        
+        if abs(p2[0] - p1[0]) > abs(p2[1] - p1[1]):
+            self.dir = 'x'
+            self.min = max(min_x, min(p1[0], p2[0]))
+            self.max = min(max_x, max(p1[0], p2[0]))
+        else:
+            self.dir = 'y'
+            self.min = max(min_y, min(p1[1], p2[1]))
+            self.max = min(max_y, max(p1[1], p2[1]))
+        self.min_x = min_x
+        self.max_x = max_x
+        self.min_y = min_y
+        self.max_y = max_y
+
+        self.cur = self.min
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        ret = None
+        while ret == None:
+            if self.cur >= self.max:
+                raise StopIteration
+            
+            if self.dir == 'x':
+                ret = self.cur,self.line.fox(self.cur)
+                if not (self.min_y < ret[1] <self.max_y):
+                    ret = None
+            else:
+                ret = self.line.foy(self.cur),self.cur
+                if not (self.min_x < ret[0] < self.max_x):
+                    ret = None
+            self.cur += 1
+        return ret
+        
 class Line(object):
-    def __init__(self, p1, p2):
+    def __init__(self, p1, p2 ):
         self.p1 = p1
         self.p2 = p2
-        self.m = (p2[0] - p1[0]) / (p2[1] - p1[1])
-        self.b = p1[0] - self.m * p1[1]
+        if (p2[0] - p1[0]) == 0:
+            self.m = 9999
+        else:
+            self.m = (p2[1] - p1[1]) / (p2[0] - p1[0])
+        self.b = p1[1] - self.m * p1[0]
+        
+    def foy(self,y):
+        return int( (y - self.b)/self.m)
 
-    def f(self,x):
+    def fox(self,x):
         return int(self.m * x + self.b)
+
+    def get_iter(self, min_x = 0, max_x = SCREEN_SIZE[0], min_y = 0, max_y = SCREEN_SIZE[1]):
+        return LineIter(self.p1, self.p2, min_x, max_x, min_y, max_y)
+
 
 def i_x(ratiox):
     return int(SCREEN_SIZE[0] * ratiox)
@@ -95,7 +144,7 @@ def match_template(template, im=None,min_match=-1, box=None,error=False):
     match = cv2.minMaxLoc(cv2.matchTemplate(image, template ,cv2.TM_CCORR_NORMED,mask=mask))
     if min_match > match[1]:
         if error:
-            raise botException("failed to match a template")
+            raise Exception("failed to match a template")
         return None
 
     if box:
@@ -116,7 +165,7 @@ def persp_proj(pnt, rotation=rotation, player=PLAYER, e=display_surface):
     # a =  #(6.5,-1.5,-2.5)
     a = pnt
     c = player
-    th = rotation[0]+ m.radians(17.3) , rotation[1]- 1*m.radians(20.9),0#rotation[1]- 1*m.radians(20.9) ,0 
+    th = rotation[0]+ m.radians(17.3) , rotation[1]- 1*m.radians(20.5),0#rotation[1]- 1*m.radians(20.9) ,0 
 
     def c_(i):
         return m.cos(th[i])
