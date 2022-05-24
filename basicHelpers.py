@@ -111,9 +111,10 @@ def sdist(rgb1, rgb2 = (0,0,0)):
 def dist(rgb1,rgb2 = (0,0,0)):
     return sdist(rgb1, rgb2) ** 0.5
 
-def get_template(name):
+def get_template(name, mode = cv2.IMREAD_COLOR):
     #print('rust\\' + IMG_PATH + '\\' +name)
-    ret = cv2.imread('rust\\' + IMG_PATH + '\\' +name,cv2.IMREAD_COLOR)
+    ret = cv2.imread('rust\\' + IMG_PATH + '\\' +name, mode)
+    print(type(ret))
     assert( type(ret) == np.ndarray)
     return ret
 
@@ -137,6 +138,7 @@ def match_template(template, im=None,min_match=-1, box=None,error=False):
     #setup mask layer
     mask = None
     if template.shape[2] == 4:
+        print('4')
         t_channels = cv2.split(template)
         template = cv2.merge(t_channels[:3])
         mask = cv2.merge([t_channels[3]]*3)

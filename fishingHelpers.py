@@ -32,7 +32,7 @@ templates = {
 'fat': get_template('fat.png'),
 'pistolbullet': get_template('pistolbullet.png'),
 'bone': get_template('bone.png'),
-'fullrod': get_template('fullrod.png')
+'fullrod': get_template('fullrod.png',cv2.IMREAD_UNCHANGED)
 }
 
 
@@ -111,14 +111,17 @@ fish_values = [0, 0, 0, 30/5, 50/5, 55/2, 65/2, 90/2]
 fish_names = ['sardine', 'anchovy', 'herring', 'trout', 'yellow', 'salmon', 'catfish', 'shark']
 
 def manage_inventory():
+    debug = False
     tl = slot_pos(0, 4)
     br = al(slot_pos(6, 0), (SLOT_SIZE, SLOT_SIZE))
     inv_box = tl[0], tl[1], br[0], br[1]
     print('ive box', inv_box)
     action_box = tl[0], 0, br[0], tl[1]
 
-    gut = fish_names
-    junk = ['fish', 'flare', 'card', 'fat', 'scrap', 'cloth', 'bone', 'pistolbullet', 'skull'] # # bottle', ' skullt,  buckett
+    gut = fish_names[:]
+    junk = [ 'flare',  'bone',  'skull'] # # bottle', '   buckett
+    if debug:
+        junk += ['fish','card', 'fat', 'scrap', 'cloth', 'pistolbullet',]
     im = None
          
     print('=tab OPEN TIDY')
@@ -129,11 +132,16 @@ def manage_inventory():
     ### GUT
     i = 0
     amntfish = [0] * len(gut)
-    im = iGrab.grab()
-    for i, gt_name in enumerate(gut):
+    def gut_type(gt_name, max=999):
+        nonlocal amntfish
+        i = fish_names.index(gt_name)
+
+        im = iGrab.grab()
         gt = templates[gt_name]
+
         pos = match_template(gt, im, 0.98, inv_box)
         print('? search for', fish_names[i],pos)
+        gutted = 0
         while pos:
             print('^ found')
             pos = pos[0]
@@ -145,30 +153,42 @@ def manage_inventory():
             while gutpos:
                 print('^gut text found')
                 amntfish[i] += 1
+                gutted += 1
+
                 gutpos = gutpos[0]
                 pag.click(gutpos[0], gutpos[1])
-                t.sleep(0.15)
+                t.sleep(0.21)
+                if gutted >= max:
+                    return True
+
                 im = iGrab.grab()
                 gutpos = match_template(templates['gut'],im, 0.975, action_box)
                 print('-- gutt search',gutpos)
             print('?? search for', fish_names[i],pos)
             pos = match_template(gt,im, 0.98, inv_box)
             print('size',im.size)
-        i += 1
+    
+    scrapless = ['sardine', 'anchovy', 'herring']
+    if debug:
+        scrapless += ['trout', 'yellow', 'salmon', 'catfish', 'shark']
+    for scrapless_type in scrapless:
+        print('GUT TYPE SCRAPLESS', scrapless)
+        gut_type(scrapless_type)
 
+    print('REFIL')
     ### REFILL
     def meatmatch(m1,m2):
         if m1 == None and m2 == None:
             print('meat match')
             return True
         elif m1 != None and m2 != None:
-            return dist(m1[0],m2[0]) < 3
+            return dist(m1[0],m2[0]) < 16
     
     for i in range(6):
         pole = slot_state(i,im)
         if pole[0]:
             oldmeatpos = None
-            meatpos = match_template(templates['fish'], im, 0.98, inv_box)
+            meatpos = match_template(templates['fish'], im, 0.98, inv_box)           
             while meatpos and not meatmatch(oldmeatpos, meatpos):
                 print('meating',meatpos, i)
                 pag.moveTo(meatpos[0])
@@ -181,6 +201,14 @@ def manage_inventory():
                 pag.mouseUp()
                 t.sleep(0.1)
                 oldmeatpos = meatpos
+                im = iGrab.grab()
+                meatpos = match_template(templates['fish'], im, 0.98, inv_box)
+                if not meatpos:
+                    for scrap_type in ['trout', 'yellow', 'salmon', 'catfish', 'shark']:
+                        print('FALLBACK GUT')
+                        if gut_type(scrap_type, 4):
+                            t.sleep(0.3)
+                            break
                 im = iGrab.grab()
                 meatpos = match_template(templates['fish'], im, 0.98, inv_box)
 
@@ -213,6 +241,9 @@ def manage_inventory():
     t.sleep(g(0.13,0.15))
     pag.keyUp('tab')
     t.sleep(0.5)
+
+
+
     return amntfish
 
 def status_pixel(i, im=None):
@@ -262,7 +293,7 @@ def get_player_stats(im=None, iters=4):
         stats.append(percent)
     return stats
 
-def open_box():
+def open_chest():
     MIN_Y = 4
     pag.keyDown('e')
     t.sleep(g(0.08))
@@ -272,28 +303,30 @@ def open_box():
     for i in range(10):
         im = iGrab.grab()
         pxl = im.getpixel(CHEST_TEXT_VERIFY)
-        if dist(pxl, CHEST_TEXT_COL) < 20:
+        pxl2 = im.getpixel(CHEST_TEXT_VERIFY_SMALL)
+        if dist(pxl, CHEST_TEXT_COL) < 10 or dist(pxl2, CHEST_TEXT_COL) < 10:
             return im
         t.sleep(0.2)
 
     return False
 
+
 def deposit_items(im=None):
     tl = slot_pos(0, 4)
-    br = al(slot_pos(6, 0), (SLOT_SIZE, SLOT_SIZE))
+    br = al(slot_pos(5, 0), (SLOT_SIZE, SLOT_SIZE))
     inv_box = tl[0], tl[1], br[0], br[1]
     if im == None:
         im = iGrab.grab()
 
 
-    inv_box = None
+    inv_box = inv_box
     old_pos = None
     clicked = True
     last_clicks = []
     for i in range(10):
         new_clicks = []
-        for fsh in fish_names[3:]:
-            fsh_pos = match_template(fsh, im, 0.98, inv_box)
+        for fsh in fish_names[3:] + ['pistolbullet', 'fat', 'scrap', 'card', 'cloth',]:
+            fsh_pos = match_template(templates[fsh], im, 0.98, inv_box)
             if fsh_pos:
                 if any([dist(p, fsh_pos[0]) < SLOT_SIZE / 2 for p in last_clicks ]):
                     return False
@@ -305,10 +338,10 @@ def deposit_items(im=None):
                 pag.mouseUp(button='right')
                 t.sleep(g(0.15))
                 im = iGrab.grab()
-                fsh_pos = match_template(fsh, im, 0.98, inv_box)
+                fsh_pos = match_template(templates[fsh], im, 0.98, inv_box)
         if len(new_clicks):
             last_clicks = new_clicks
-            t.sleep(1)
+            t.sleep(0.5)
             im = iGrab.grab()
         else:
             return True
@@ -322,15 +355,24 @@ def replenish_rods(im=None):
 
     for i, state in enumerate(states):
         if not state[0]:
-            rod_pos = match_template(templates['fullrod'], im, 0.98, chest_box)
+            print('meed',i)
+            rod_pos = match_template(templates['fullrod'], im, 0.99, chest_box)
+            print(rod_pos)
             if rod_pos:
-                pag.moveTo(al(slot_pos(i), (SLOT_SIZE//2, SLOT_SIZE//2) ))
+                
+                t.sleep(g(0.1))
+                pag.moveTo(al(rod_pos[0], (20,0)))
                 t.sleep(g(0.1))
                 pag.mouseDown()
                 t.sleep(g(0.1))
-                pag.moveTo(al(rod_pos[0], (20,0)))
-                t.sleep(0.1)
+                pag.moveTo(al(slot_pos(i, 0), (SLOT_SIZE//2, SLOT_SIZE//2) ))
+                t.sleep(g(0.1))
                 pag.mouseUp()
+                t.sleep(0.3 )
+                im = iGrab.grab()
+            else:
+                return False
+    return True
 
 
 def get_brightness(im=None):

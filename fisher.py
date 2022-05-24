@@ -1,6 +1,7 @@
 import time as t
 #from scipy.stats import linregress
 from PIL import ImageDraw, Image
+from sympy import Q
 from settings import *
 from basicHelpers import *
 from fishingHelpers import *
@@ -41,11 +42,15 @@ class Fisher(object):
 
         self.mouse = Mouse()
         
-    def rotate_to(self, rx, ry, speed=1):
+    def rotate_to(self, rx, ry, speed=1, ignore_cap=False):
         dbg('@rotate_to',1)
+
+        if not ignore_cap:
+            rx = min(max(rx, MIN_ROT), MAX_ROT)
+            ry = min(max(ry, MIN_ROT), MAX_ROT)
         #dt = t.time()
-        dx = round(min(max(rx, MIN_ROT), MAX_ROT))
-        dy = round(min(max(ry, MIN_ROT), MAX_ROT))
+        dx = round(rx)
+        dy = round(ry)
         #self.rotate(dx,dy)
         self.mouse.rotate_to(round(dx*SENSITIVITY),round(dy*SENSITIVITY),speed)
         dbg('% rotate_to',1)
@@ -459,8 +464,8 @@ class Fisher(object):
         return event
 
     def fish(self):
-        print('FI33333333SH LEFT')
-        self.handle_angle_correction()
+        #   print('FI33333333SH LEFT')
+        #self.handle_angle_correction()
         print('### cast')
         self.handle_cast()
         print('### pull wait')
@@ -486,6 +491,7 @@ class Fisher(object):
         log(str({
             'type': 'START',
             'id':run_id,
+            'time':t.time(),
             'var':self.var,
             }))
         t.sleep(4)
@@ -519,7 +525,7 @@ class Fisher(object):
             self.rm_button('right')
             self.switch_keys([])
             self.mouse.play_thread.join()
-            loop_sum = manage_inventory()
+            loop_sum = self.inv_management()
             pag.press('space')
             t.sleep(g(0.6))
             
@@ -539,6 +545,7 @@ class Fisher(object):
         self.reset_rotation()
         return total_fish
 
+    #TODO dupe?
     def slot_state(self, i, im=None):
         pos = slot_pos(i,0)
         print('pos',i,pos)
@@ -597,6 +604,32 @@ class Fisher(object):
             if ss[0] and ss[1] and ss[2]:
                 return i
 
+    def chest_look(self, i):
+        chest = CHESTS[i]
+        self.rotate_to(chest[0], chest[1], ignore_cap=True)
+        self.mouse.play_thread.join()
+
+    def inv_management(self):
+        loop_sum = manage_inventory()
+        needs_rods = any([ slot_state(i)[0] == False for i in range(6)])
+        depo = True
+        for i in range(len(CHESTS)):
+            if needs_rods or depo:
+                self.chest_look(i)
+                chest_im = open_chest()
+                if chest_im:
+                    if needs_rods:
+                        needs_rods = not replenish_rods(chest_im)
+                    if depo:
+                        depo = not deposit_items(chest_im)
+                pag.keyDown('tab')
+                t.sleep(g(0.1))
+                pag.keyUp('tab')
+                t.sleep(0.2)
+            else:
+                break
+        return loop_sum
+        
 if __name__ == "__main__":
     print('running fisher...')
     if 0:

@@ -43,6 +43,16 @@ def dbg(msg, depth=0):
         print('(',new_time - dbg_time, ') ', msg)
         dbg_time = new_time
 
+CHESTS = [
+    (-90-17,17, 2),
+    (-90,15, 8),
+    (-102.55,-25, 1.5),
+]
+'''(-85,-26, 3),
+    (-115,-27,3),
+    (-148,-27,3)
+]'''
+
 if SCREEN_SIZE == P1440:
     
     BP_POS = 882,762
@@ -91,7 +101,7 @@ if SCREEN_SIZE == P1440:
     
     STATUS_0_POS = (2447, 1217)
     STATUS_HEIGHT = 56
-
+    CHEST_TEXT_VERIFY_SMALL = (1742,881)
     CHEST_TEXT_VERIFY = (1742,510)
     CHEST_TEXT_COL = (232,221,211)
     
