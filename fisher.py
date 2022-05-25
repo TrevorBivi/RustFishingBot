@@ -36,6 +36,11 @@ class Fisher(object):
         self.dy = 0
         self.brightness = 1.0
 
+        self.last_pull_time = None
+        self.last_cool_time = None
+
+        self.last_acc_high = False
+
         self.fishing_left = False
         self.fishing_left_time = None
         self.first_rot = None
@@ -80,11 +85,11 @@ class Fisher(object):
         dbg('@switch_keys ' + str(keys))
         for nk in keys:
             if not nk in self.keys:
-                dbg('>'+nk)
+                dbg('>'+nk,1)
                 pag.keyDown(nk)
         for ok in self.keys:
             if not ok in keys:
-                dbg('<'+ok)
+                dbg('<'+ok,1)
                 pag.keyUp(ok)
         self.keys = keys
         dbg('%switch_keys')
@@ -97,7 +102,7 @@ class Fisher(object):
             return ['s']
         else:
             keys = []
-            if abs(pos[0] - SCREEN_SIZEsdsd[0] / 2) < i_x(self.var['DIAGONALWIDTH']):
+            if abs(pos[0] - SCREEN_SIZE[0] / 2) < i_x(self.var['DIAGONALWIDTH']):
                 keys.append('s')
                 
             if pos[0] - SCREEN_SIZE[0] / 2 > 0:
@@ -120,6 +125,8 @@ class Fisher(object):
         self.heat = 0
         self.cooling = False
         self.brightness = get_brightness(im)
+        self.band_positions = []
+        self.band_track_length = 8
        
         if self.active_rod(im) == None:
             pressSlot(self.inactive_rod(im))
@@ -153,6 +160,87 @@ class Fisher(object):
             t.sleep(g(1.3))
         dbg('%event_wait')
         
+    def track_band(self, im):
+        debug = True
+
+        if im == None:
+            im = iGrab.grab()
+        x_pos = 0
+        y_pos = 0
+        samples = 0
+        
+        def is_line(px):
+            chan_max = lerp(self.brightness, LINE_BRIGHTNESS_CURVE)
+            if px[0] <= chan_max and px[1] <= chan_max and px[2] <= chan_max:
+                return True
+            return False
+
+        for x in range(PULLING_TL[0]-100, PULLING_BR[0]+100, 3):
+            for y in range(PULLING_TL[1]-100, PULLING_BR[1]+100, 3):
+                px = im.getpixel((x,y))
+                if is_line(px):
+                    x_pos += x
+                    y_pos += y
+                    samples += 1
+                    if debug:
+                        im.putpixel((x,y), (255,0,255))
+                else:
+                    if debug:
+                        im.putpixel((x,y), (0,255,0))
+        #if samples > 3:
+#
+        if samples == 0:
+            self.band_positions.append((PULLING_TL[0]-100   , PULLING_BR[1]+100, t.time(), samples))
+        else:
+            self.band_positions.append((x_pos/samples, y_pos/samples, t.time(), samples))
+        self.band_positions = self.band_positions[-6:]
+        if False:#debug:
+            rt = str(t.time())
+            rt = rt[rt.index('.') - 5: rt.index('.') + 3]
+
+            im.save('dbg\\acc' + '_' + rt + '.png')
+        print('ROD x_pos',x_pos, 'y_pos', y_pos)
+    
+    def band_acceleration(self):
+        if len(self.band_positions) < 5:
+            return 0
+        
+        last_x = self.band_positions[1][0]
+        last_y = self.band_positions[1][1]
+        last_t = self.band_positions[1][2]
+
+        last_dt = last_t - self.band_positions[0][2]
+        last_vx = last_x - self.band_positions[0][0]/last_dt
+        last_vy = last_y - self.band_positions[0][1]/last_dt
+
+        avg_vx = 0
+        avg_vy = 0
+        acc = 0
+        samples = 0
+        vls = []
+        for i in range(2, len(self.band_positions)):
+            new_pos = self.band_positions[i]
+            old_pos = self.band_positions[i-1]
+
+            new_dt = new_pos[2] - old_pos[2]
+            new_vx = new_pos[0] - old_pos[0] / new_dt
+            new_vy = new_pos[1] - old_pos[1] / new_dt
+            vls.append((new_vx, new_vy))
+            avg_vx += new_vx
+            avg_vy += new_vy
+            samples += 1
+        
+        avg_vx /= samples
+        avg_vy /= samples
+
+        err = 0
+        for vl in vls:
+            err += (vl[0] - avg_vx) ** 2 + (vl[1] - avg_vy) ** 2
+
+        print('RODacc', acc / samples / 100)
+        return err / samples / 100000000000000
+
+
     def handle_pull(self):
         dbg('@handle_pull')
         def handle_event(im):
@@ -171,7 +259,7 @@ class Fisher(object):
         if self.brightness < 0.045:
             print('SKIPPING PULL\n;lllllllllllllll\nlllllllllllll')
             dbg('%handle pull - skipped')
-            return None
+            return None     
         
         start_time = t.time()
         while t.time() - start_time < self.var['MAXWAIT']:
@@ -187,7 +275,7 @@ class Fisher(object):
                     if is_rod(px):
                         print('HOOKED')
                         self.switch_keys(['s','d'])
-                        for time_length in (self.var['FIRST_PULL_TIME'], self.var['FIRST_COOL_TIME']):
+                        '''for time_length in (self.var['FIRST_PULL_TIME'], self.var['FIRST_COOL_TIME']):
                             test_time = t.time()
                             event = None
                             while t.time() - test_time < time_length and not event:
@@ -199,7 +287,7 @@ class Fisher(object):
                                     return event
                                 #t.sleep(self.var['SCANTIME'])
                                 
-                            self.switch_keys([])
+                            self.switch_keys([])'''
                         dbg('%handle_pull - pulled')
                         return None
         dbg('%handle_pull - maxwait')
@@ -207,7 +295,7 @@ class Fisher(object):
     
     def handle_angle_correction(self,im=None, vx = None, vy = None):
         dbg('@handle_angle_correction')
-        debug = False#sdTrue
+        debug = False#True
         if self.fishing_left_time and t.time() - self.fishing_left_time < 2:
             dbg('%handle_angle_correction - time skip')
             return True
@@ -250,7 +338,7 @@ class Fisher(object):
             max_l = persp_proj(left_corner_max, rot)
             min_l = persp_proj(left_corner_min, rot)
             max_bright = 160 * self.brightness
-            print('R',runtime, 'sdminl', min_l, 'maxl', max_l)
+            #print('R',runtime, 'sdminl', min_l, 'maxl', max_l)
             water_height_line = Line( min_l, max_l )
             iter_dist = 0
             line_iter = water_height_line.get_iter()
@@ -260,11 +348,11 @@ class Fisher(object):
                 pxl = im.getpixel((x,y))
                 
                 if dist(pxl, (0,0,0)) < max_bright:
-                    print('R',runtime,"dist445", iter_dist)
-                    print("delta", abs(line_iter.max-line_iter.min)) 
-                    print("water min max", (self.var['WATER_MAX'] - self.var['WATER_MIN']) )
-                    print("water min",  self.var['WATER_MIN'] )
-                    print("HEIIGHT445", iter_dist / abs(line_iter.max-line_iter.min) * (self.var['WATER_MAX'] - self.var['WATER_MIN']) + self.var['WATER_MIN'] - 0.2)
+                    #print('R',runtime,"dist445", iter_dist)
+                    #print("delta", abs(line_iter.max-line_iter.min)) 
+                    #print("water min max", (self.var['WATER_MAX'] - self.var['WATER_MIN']) )
+                    #print("water min",  self.var['WATER_MIN'] )
+                    #print("HEIIGHT445", iter_dist / abs(line_iter.max-line_iter.min) * (self.var['WATER_MAX'] - self.var['WATER_MIN']) + self.var['WATER_MIN'] - 0.2)
 
                     water_height = max(
                         iter_dist / abs(line_iter.max-line_iter.min) * (self.var['WATER_MAX'] - self.var['WATER_MIN']) + self.var['WATER_MIN'] - 0.2,
@@ -391,7 +479,31 @@ class Fisher(object):
 
     def update_actions(self, last_action_time):
         dbg('@update_actions')
+        print('update time', last_action_time)
         if self.cooling:
+            print('cooling')
+            self.switch_keys([])
+            self.heat -= last_action_time
+            if self.heat <= 0:
+                self.cooling = False
+        if not self.cooling:
+            self.heat += last_action_time
+            desired = self.desired_keys()
+            acc = self.band_acceleration()
+            if self.heat > 1 and False: #acc >= 630:
+                if self.last_acc_high:
+                    print('high accel',acc)
+                    self.band_positions = []
+                    self.cooling = True
+                    self.heat = self.heat * 0.8 + 0.5
+                    self.switch_keys([])
+                self.last_acc_high = True
+            else:
+                self.last_acc_high = False
+                #print('fine accel',acc)
+                self.switch_keys(desired)
+
+        '''if self.cooling:
             self.heat -= self.var['COOLTIME'] * last_action_time
             if self.heat <= 0:
                 self.cooling = False
@@ -408,7 +520,7 @@ class Fisher(object):
                 self.switch_keys([])
 
             else:
-                self.switch_keys(desired)
+                self.switch_keys(desired)'''
         dbg('%update_actions')
 
     def event_check(self, im=None):
@@ -421,10 +533,10 @@ class Fisher(object):
                     #print('raised rod check',x,y, px)
                     px = im.getpixel((x,y))
                     #print('raised rod check',x,y, px)
-                    im.putpixel((x,y), (0,255,0))
+                    #im.putpixel((x,y), (0,255,0))
 
                     if px[0] <= chan_max and px[1] <= chan_max and px[2] <= chan_max:
-                        im.putpixel((x,y), (0,0,255))
+                        #im.putpixel((x,y), (0,0,255))
                         return 'SNAP'
             return None
         
@@ -466,6 +578,9 @@ class Fisher(object):
 
     def handle_fight(self):
         dbg('@handle_fight')
+
+        debug = True
+
         im = iGrab.grab()
         event = self.event_check()
         start_time = t.time()
@@ -473,6 +588,8 @@ class Fisher(object):
         new_time = start_time
         last_ims = []
         iters = 0
+        datas = []
+        self.band_positions = []
 
         while not event or new_time - start_time > self.var['MAXWAIT']:
             last_time = new_time
@@ -485,22 +602,44 @@ class Fisher(object):
             im = iGrab.grab()
             self.handle_angle_correction(im, vx, vy)
 
+
+            self.track_band(im)
+            if len(self.band_positions):
+                datas.append(self.band_positions[0])
             self.update_actions(time_change)
             if iters % 3 == 0:
                 event = self.event_check(im)
                 self.brightness = get_brightness(im)
             
-            #last_ims.append(im)
+            
+            #datas.append(self.band_acceleration())
+            if debug:
+                last_ims.append(im)
             #last_ims = last_ims[-110:]
             iters += 1
             if iters % 4 == 0:
-                print('iter time', time_change)
+                
+                print('iter time', time_change, 'band_accel', self.band_acceleration())
             #t.sleep(max(0,self.var['SCANTIME'] - time_change))
             #print('sleeping', max(0,self.var['SCANTIME'] - time_change))
-        if event == 'SNAP':
-            dbg('# save snap pics')
-            for i, snap_im in enumerate(last_ims[-1:]):
-                snap_im.save('dbg\\' + str(new_time) + '_' + str(i) + '.png')
+        if abs(datas[0][2] - datas[-1][2]) < 15:
+            print('SAVE DATATE')
+            if event == 'SNAP': 
+                dbg('# save snap pics')
+                with open('dbg\\snaps.txt', 'a+') as f:
+                    f.write(json.dumps(datas[ ::-1]) + '\n')
+                    #f.write(json.dumps(str(datas[ ::-1])) + '\n')
+                #for i, snap_im in enumerate(last_ims[-1:]):
+                #    snap_im.save('dbg\\' + str(new_time) + '_' + str(i) + '.png')
+            elif event:
+                with open('dbg\\catches.txt', 'a+') as f:
+                    f.write(json.dumps(datas[ ::-1]) + '\n')
+
+        if debug:
+            for sim in last_ims:
+                sim.thumbnail((1560//2, 1440//2), Image.NEAREST )
+                sim.save('dbg\\'  + str(iters) + str(event) + str(t.time())[8:14] + '.png')
+
 
         dbg('%handle_fight')
         return event
@@ -512,8 +651,9 @@ class Fisher(object):
         self.handle_cast()
         print('### pull wait')
         res = self.handle_pull()
+        res = False
         if res:
-            print('!!! PULL EVENT')
+            print('!!! EARLY FISH')
             self.reset_rotation()
             return res
         print('### start fight')
@@ -550,7 +690,7 @@ class Fisher(object):
             total_fish[ft] = 0
         while not self.maxtime or new_time - start_time < self.maxtime:
             last_result = None
-            for i in range(self.var['FISHES_PER_ITER']):
+            for i in range(58): #range(self.var['FISHES_PER_ITER']):
                 print('PROG',t.time() - start_time,'/',self.maxtime)
                 self.event_wait(last_result)
                 
@@ -583,6 +723,7 @@ class Fisher(object):
             log(str(log_data))
             print('done loop')
             new_time = t.time()
+            input('DONE DATA GATHER')
             
         self.reset_rotation()
         return total_fish
