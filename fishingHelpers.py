@@ -111,7 +111,7 @@ fish_values = [0, 0, 0, 30/5, 50/5, 55/2, 65/2, 90/2]
 fish_names = ['sardine', 'anchovy', 'herring', 'trout', 'yellow', 'salmon', 'catfish', 'shark']
 
 def manage_inventory():
-    debug = False
+    debug = True #False
     tl = slot_pos(0, 4)
     br = al(slot_pos(6, 0), (SLOT_SIZE, SLOT_SIZE))
     inv_box = tl[0], tl[1], br[0], br[1]
@@ -379,9 +379,7 @@ def get_brightness(im=None):
     if im == None:
         im = iGrab.grab()
 
-    BRIGHTNESS_TL = 1700,70
-    BRIGHTNESS_BR = 2560,400
-    BRIGHTNESS_SPEED = 45
+
     br = 0
     bg = 0
     bb = 0

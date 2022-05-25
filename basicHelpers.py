@@ -11,18 +11,24 @@ class LineIter(object):
     def __init__(self, p1, p2, min_x = 0, max_x = SCREEN_SIZE[0], min_y = 0, max_y = SCREEN_SIZE[1]):
         self.line = Line(p1,p2)
         
-        if abs(p2[0] - p1[0]) > abs(p2[1] - p1[1]):
-            self.dir = 'x'
-            self.min = max(min_x, min(p1[0], p2[0]))
-            self.max = min(max_x, max(p1[0], p2[0]))
-        else:
-            self.dir = 'y'
-            self.min = max(min_y, min(p1[1], p2[1]))
-            self.max = min(max_y, max(p1[1], p2[1]))
         self.min_x = min_x
         self.max_x = max_x
         self.min_y = min_y
         self.max_y = max_y
+
+        if abs(p2[0] - p1[0]) > abs(p2[1] - p1[1]):
+            self.dir = 'x'
+            self.min = max(min_x, min(max_x, p1[0]))
+            self.max = max(min_x, min(max_x, p2[0]))
+        else:
+            self.dir = 'y'
+            self.min = max(min_y, min(max_y, p1[1]))
+            self.max = max(min_y, min(max_y, p2[1]))
+
+        if self.min < self.max:
+            self.iter_dir = 1
+        else:
+            self.iter_dir = -1
 
         self.cur = self.min
 
@@ -32,7 +38,8 @@ class LineIter(object):
     def __next__(self):
         ret = None
         while ret == None:
-            if self.cur >= self.max:
+            self.cur += self.iter_dir
+            if self.cur == self.max:
                 raise StopIteration
             
             if self.dir == 'x':
@@ -43,7 +50,6 @@ class LineIter(object):
                 ret = self.line.foy(self.cur),self.cur
                 if not (self.min_x < ret[0] < self.max_x):
                     ret = None
-            self.cur += 1
         return ret
         
 class Line(object):
@@ -221,9 +227,15 @@ def persp_proj(pnt, rotation=rotation, player=PLAYER, e=display_surface):
         ])'''
     
     d = [
-            c_(y)*( s_(z)*Y + c_(z)*X) - s_(y)*Z,
-            s_(x)*(c_(y)*Z + s_(y)*( s_(z)*Y + c_(z)*X)) + c_(x)*( c_(z)*Y - s_(z)*X),
-            c_(x)*(c_(y)*Z + s_(y)*( s_(z)*Y + c_(z)*X)) - s_(x)*( c_(z)*Y - s_(z)*X)
+            ###     
+            #c_(y)*( s_(z)*Y + c_(z)*X) - s_(y)*Z,
+            c_(y)*(c_(z)*X) - s_(y)*Z,
+            #      ##         ## 
+            #s_(x)*(c_(y)*Z + s_(y)*( s_(z)*Y + c_(z)*X)) + c_(x)*( c_(z)*Y - s_(z)*X),
+            s_(x)*(c_(y)*Z + s_(y)*( s_(z)*Y + X)) + c_(x)*(Y),
+            #       ##        ##                
+            #c_(x)*(c_(y)*Z + s_(y)*( s_(z)*Y + c_(z)*X)) - s_(x)*( c_(z)*Y - s_(z)*X)
+            c_(x)*(c_(y)*Z + s_(y)*(X)) - s_(x)*(Y)
         ]
 
     '''d = [

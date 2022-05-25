@@ -113,6 +113,10 @@ class Fisher(object):
         #im.save('dbg/wat' + str(t.time()) + '.png')
         self.rotate_to(0,0)
         self.mouse.play_thread.join()
+        t.sleep(g(0.05))
+        self.rotate_to(0,0)
+        t.sleep(g(0.1))
+        self.mouse.play_thread.join()
         self.heat = 0
         self.cooling = False
         self.brightness = get_brightness(im)
@@ -203,7 +207,7 @@ class Fisher(object):
     
     def handle_angle_correction(self,im=None, vx = None, vy = None):
         dbg('@handle_angle_correction')
-        debug = False
+        debug = False#sdTrue
         if self.fishing_left_time and t.time() - self.fishing_left_time < 2:
             dbg('%handle_angle_correction - time skip')
             return True
@@ -215,6 +219,12 @@ class Fisher(object):
         if im == None:
             im = iGrab.grab()
         old_fishing_left = self.fishing_left
+
+        hot_pos = slot_pos(0,0)
+        rot = (m.radians(vy / SENSITIVITY) * 1,m.radians(vx / SENSITIVITY),0)#,0)
+        snap_rot = rot[0], rot[1] - m.radians(50), rot[0]
+        z_dist = min(2.3 / max(0.001, abs( m.tan(snap_rot[1])) ), 6.7)
+
         def handle_rotation():
             if self.fishing_left and not old_fishing_left:
                 print('ROTTEATE LEFT!!!!')
@@ -225,48 +235,72 @@ class Fisher(object):
                 self.rotate_to(50, 0, 3 )
             #else:
                 #print('no action', self.brightness)
+
         def is_line(x,y):
             px = im.getpixel((x,y))
             chan_max = 95 * self.brightness + 0
             if px[0] <= chan_max and px[1] <= chan_max and px[2]  <= chan_max:
                 return True
+        runtime = t.time()
+        def get_height():
+            nonlocal im
+            left_corner_min = [-2.3, self.var['WATER_MIN'], z_dist]
+            left_corner_max = [-2.3, self.var['WATER_MAX'], z_dist]
+            
+            max_l = persp_proj(left_corner_max, rot)
+            min_l = persp_proj(left_corner_min, rot)
+            max_bright = 160 * self.brightness
+            print('R',runtime, 'sdminl', min_l, 'maxl', max_l)
+            water_height_line = Line( min_l, max_l )
+            iter_dist = 0
+            line_iter = water_height_line.get_iter()
+            water_height = 0
+            for (x, y) in line_iter:
+                #print('iter ', x,y)
+                pxl = im.getpixel((x,y))
+                
+                if dist(pxl, (0,0,0)) < max_bright:
+                    print('R',runtime,"dist445", iter_dist)
+                    print("delta", abs(line_iter.max-line_iter.min)) 
+                    print("water min max", (self.var['WATER_MAX'] - self.var['WATER_MIN']) )
+                    print("water min",  self.var['WATER_MIN'] )
+                    print("HEIIGHT445", iter_dist / abs(line_iter.max-line_iter.min) * (self.var['WATER_MAX'] - self.var['WATER_MIN']) + self.var['WATER_MIN'] - 0.2)
+
+                    water_height = max(
+                        iter_dist / abs(line_iter.max-line_iter.min) * (self.var['WATER_MAX'] - self.var['WATER_MIN']) + self.var['WATER_MIN'] - 0.2,
+                        self.var['WATER_MIN']
+                    )
+                    if debug:
+                        im.putpixel((x+8, y+0), (250,255,255))
+                        im.putpixel((x+9, y+0), (250,255,255))
+                        im.putpixel((x+8, y+1), (250,255,255))
+                        im.putpixel((x+9, y+1), (250,255,255))
+                        im.putpixel((x+10, y+0), (150,255,155))
+                        im.putpixel((x+10, y+0), (150,255,155))
+                        im.putpixel((x+11, y+1), (150,255,155))
+                        im.putpixel((x+11, y+1), (150,255,155))
+                        im.putpixel((x+12, y+0), (150,255,155))
+                        im.putpixel((x+13, y+0), (150,255,155))
+                        im.putpixel((x+12, y+1), (150,255,155))
+                        im.putpixel((x+13, y+1), (150,255,155))
+                    break
+                elif debug:
+                    pass#im.putpixel((x, y), (150,150,150))   
+                iter_dist += 1
+            return water_height
 
 
-        hot_pos = slot_pos(0,0)
+        height = get_height()
+
+
+        mod_z_dist = abs((2.3+height/2 - self.var['WATER_MIN']/2) / max(0.001, abs( m.tan(snap_rot[1])) ))
         
-        
+        FISH_LEFT_P1 = [ -2.3+height/2 - self.var['WATER_MIN']/2, height, min(mod_z_dist, 6.7) ]
+        FISH_LEFT_P2 = [ -0.1, height, 0.2 ]
+        pp1 = persp_proj(FISH_LEFT_P1, rot)
+        pp2 = persp_proj(FISH_LEFT_P2, rot)
 
-        scan_len = min(6, abs( 0.8 /  m.sin( m.radians(20.9) - m.radians(self.mouse.vx.value / SENSITIVITY) )))
-        
-
-        FISH_LEFT_P2 = [ -0.3 , 0, 0.5 ]
-        #FISH_LEFT_P1 = [ -2.25, 0,  ]
-        rot = (m.radians(vy / SENSITIVITY) * 1,m.radians(vx / SENSITIVITY),0)#,0)
-        #print('left rot',)
-        #rot = (0.0, -0.17453292519943295, 0)
-        snap_rot = rot[0], rot[1] - m.radians(50), rot[0]
-
-
-        z_dist = 2.4 / max(0.001, abs( m.tan(snap_rot[1])) )
-        #print('zdist', z_dist)
-        FISH_LEFT_P1 = [ -2.4, -0.8, min(z_dist, 6.7) ]
-
-        FISH_LEFT_P2 = [ m.sin(snap_rot[1] - m.radians(20.5)) ,-0.8   ,m.cos(snap_rot[1] - m.radians(20.5)) ]
-
-        #FISH_LEFT_P1 = [-2.3, 0, 6]
-        #FISH_LEFT_P2     = [0.5, 0, 6]
-          #2.3 2.4
-        
-        #pp1 = weak_proj(FISH_LEFT_P1, (m.degrees(rot[0]), m.degrees(rot[1])))  # persp_proj(FISH_LEFT_P1, rot )  
-        pp1 = persp_proj(FISH_LEFT_P1, rot)  # persp_proj(FISH_LEFT_P1, rot )  
-        #pp2 = weak_proj(FISH_LEFT_P2, (m.degrees(rot[0]), m.degrees(rot[1])))  # persp_proj(FISH_LEFT_P1, rot )  
-        pp2 = persp_proj(FISH_LEFT_P2, rot)  # persp_proj(FISH_LEFT_P1, rot )  
-
-        if pp1[1] > pp2[1]:
-            scan_line = Line(pp2,pp1)
-        else:
-            #print('aa',pp1,pp2)
-            scan_line = Line(pp1,pp2)
+        scan_line = Line(pp2,pp1)
         scan_iter = scan_line.get_iter()
         #print('P1', pp1, 'P2', pp2)
         #print('rot' + str(rot) + 'MIN MAX' + str(scan_iter.min) + ', ' + str(scan_iter.max))
@@ -276,70 +310,78 @@ class Fisher(object):
         self.fishing_left = False
 
         for x,y in scan_iter:
-            #print('ITER',x,y)
+            #print('ITER33',x,y)
             if hot_pos[1] < y < hot_pos[1] + SLOT_SIZE and hot_pos[0] < x < hot_pos[0] + SLOT_SIZE * 6:
                 continue
 
             if is_line(x, y):
                 self.fishing_left_time = t.time()
-
-                #if debug:
-                    #im.putpixel((x+2,y+1), (255,0,255))
-                    #im.putpixel((x+3,y+1), (255,0,255))
-                    #im.putpixel((x+2,y+1), (255,0,255))
-                    #im.putpixel((x+3,y+1), (255,0,255))
-                
-                #im.putpixel((x+1,y+1), (255,255,0))
-                #im.putpixel((x+1,y), (255,255,0))
-                #im.putpixel((x,y+1), (255,255,0))
-                #im.putpixel((x,y), (255,255,0))
-                #im.putpixel((x+2,y+1), (255,255,0))
-                #im.putpixel((x+2,y), (255,255,0))
-                #im.putpixel((x+3,y+1), (255,255,0))
-                #im.putpixel((x+3,y), (255,255,0))
                 self.fishing_left = True
-                '''im.putpixel((x-1,y), (255,0,0))
-                im.putpixel((x+1,y), (255,0,0))
-                im.putpixel((x+4,y), (255,0,0))
-                im.putpixel((x+5,y), (255,0,0))
-                im.putpixel((x+6,y), (255,0,0))'''
-                #break
-            b=0
-            px = im.getpixel((x,y))
-            chan_max = 95 * self.brightness + 2
-            if px[0] <= chan_max:
-                b += 1
-            if  px[1] <= chan_max:
-                b += 2
-            if  px[2] <= chan_max:
-                b += 4
-            if chan_max >= 2:
-                b += 8
-            if is_line(x,y):
-                b += 16
-            #print('check line', x,y)
+                if not debug:
+                    break
+
             if debug:
                 if self.fishing_left:
                     im.putpixel((x,y), (0,255,0))
                 else:
                     im.putpixel((x,y), (0,0,255))
             
-        
         handle_rotation()
-        #draw = ImageDraw.Draw(im)
-        #draw.line((pp2, pp1), fill=(250,0,0))
-        #print('ppppppppppppp', pp1,pp2)
 
-        #im = im.crop((0,720,2560/2,1440))
-        #im = im.convert('L')
+        if debug:
+
+            far_corner_max = [-2.3, self.var['WATER_MAX'], 5.8]
+            right_corner_max = [0.5, self.var['WATER_MAX'], 5.8]
+            left_corner_max = [-2.3, self.var['WATER_MAX'], z_dist]
+            max_l = persp_proj(left_corner_max, rot)
+            max_f = persp_proj(far_corner_max, rot)
+            max_r = persp_proj(right_corner_max, rot)
+
+            far_corner_min = [-2.3, self.var['WATER_MIN'], 5.8]
+            right_corner_min = [0.5, self.var['WATER_MIN'], 5.8]
+            left_corner_min = [-2.3, self.var['WATER_MIN'], z_dist]
+            min_l = persp_proj(left_corner_min, rot)
+            min_f = persp_proj(far_corner_min, rot)
+            min_r = persp_proj(right_corner_min, rot)
+
+            far_corner_0 = [-2.3, 0, 5.8]
+            right_corner_0 = [0.5, 0, 5.8]
+            left_corner_0 = [-2.3, 0, z_dist]
+            zero_l = persp_proj(left_corner_0, rot)
+            zero_f = persp_proj(far_corner_0, rot)
+            zero_r = persp_proj(right_corner_0, rot)
+
+            far_corner_scan = [-2.3,height , 5.8]
+            right_corner_scan = [0.5,height , 5.8]
+            left_corner_scan = [-2.3,height , z_dist]
+            scan_l = persp_proj(left_corner_scan, rot)
+            scan_f = persp_proj(far_corner_scan, rot)
+            scan_r = persp_proj(right_corner_scan, rot)
+            
+
+            draw = ImageDraw.Draw(im)
+            print('BACK PLANE POINTS, ', zero_l, zero_f, zero_r)
+            draw.line((min_l, min_f), fill=(250,0,0))
+            draw.line((min_f, min_r), fill=(250,0,0))
+
+            draw.line((max_l, max_f), fill=(0,0,250))
+            draw.line((max_f, max_r), fill=(0,0,250))
+
+            draw.line((zero_l, zero_f), fill=(50,50,50))
+            draw.line((zero_f, zero_r), fill=(50,50,50))
+
+            draw.line((scan_l, scan_f), fill=(0,250,0))
+            draw.line((scan_f, scan_r), fill=(0,250,0))
+
+
         if debug: #self.fishing_left:
             #im = im.crop((0,1440//3,2560//2,1440))
             im = im.crop((0,0,2560,1440))
-            im.thumbnail( (2560//6,1440//6  ) , Image.NEAREST)
+            im.thumbnail( (2560//2,1440//2  ) , Image.NEAREST)
             if self.fishing_left:
-                im.save('dbg/fff' + str(t.time()) + '.png')
+                im.save('dbg/fff' + str(runtime) + '.png')
             else:
-                im.save('dbg/ggggg' + str(t.time()) + '.png')
+                im.save('dbg/ggggg' + str(runtime) + '.png')
 
         #im.save('dbg/asdas' + str(t.time()) + '.png')
         #sprint('FISHLEFT',self.fishing_left, 95 * self.brightness + 2, )
@@ -608,9 +650,14 @@ class Fisher(object):
         chest = CHESTS[i]
         self.rotate_to(chest[0], chest[1], ignore_cap=True)
         self.mouse.play_thread.join()
+        t.sleep(0.3)
 
     def inv_management(self):
+        debug = True
         loop_sum = manage_inventory()
+        if debug:
+            return loop_sum
+
         needs_rods = any([ slot_state(i)[0] == False for i in range(6)])
         depo = True
         for i in range(len(CHESTS)):
@@ -625,7 +672,7 @@ class Fisher(object):
                 pag.keyDown('tab')
                 t.sleep(g(0.1))
                 pag.keyUp('tab')
-                t.sleep(0.2)
+                t.sleep(0.5)
             else:
                 break
         return loop_sum
