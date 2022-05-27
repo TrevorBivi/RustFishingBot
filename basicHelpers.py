@@ -8,7 +8,7 @@ from PIL import ImageGrab as iGrab
 import math as m
 
 class LineIter(object):
-    def __init__(self, p1, p2, min_x = 0, max_x = SCREEN_SIZE[0], min_y = 0, max_y = SCREEN_SIZE[1]):
+    def __init__(self, p1, p2, speed=1, min_x = 0, max_x = SCREEN_SIZE[0], min_y = 0, max_y = SCREEN_SIZE[1]):
         self.line = Line(p1,p2)
         
         self.min_x = min_x
@@ -38,7 +38,7 @@ class LineIter(object):
     def __next__(self):
         ret = None
         while ret == None:
-            self.cur += self.iter_dir
+            self.cur += self.iter_dir * self.speed
             if self.cur == self.max:
                 raise StopIteration
             
@@ -68,8 +68,8 @@ class Line(object):
     def fox(self,x):
         return int(self.m * x + self.b)
 
-    def get_iter(self, min_x = 0, max_x = SCREEN_SIZE[0], min_y = 0, max_y = SCREEN_SIZE[1]):
-        return LineIter(self.p1, self.p2, min_x, max_x, min_y, max_y)
+    def get_iter(self, speed=1, min_x = 0, max_x = SCREEN_SIZE[0], min_y = 0, max_y = SCREEN_SIZE[1]):
+        return LineIter(self.p1, self.p2, speed, min_x, max_x, min_y, max_y)
 
 
 def i_x(ratiox):

@@ -80,12 +80,12 @@ def slot_state(i, im=None, brightness = None):
     for xi in range(x-w,x+w):
         for yi in range(y-3*w,y-w):
             px = im.getpixel((xi,yi))
-            if dist(px,(115,140,68)) < 15:
+            if sdist(px,(115,140,68)) < 225: #15
                 
                 hasHealth = True
                 break
     px = im.getpixel(full)
-    isFull = dist(px,(227,227,227)) < 30
+    isFull = sdist(px,(227,227,227)) < 900 #30
 
     if brightness == None:
         return hasHealth, isFull
@@ -97,7 +97,7 @@ def slot_state(i, im=None, brightness = None):
         SELECTED_MIN[1] + brightness * (SELECTED_MAX[1] - SELECTED_MIN[1]),
         SELECTED_MIN[2] + brightness * (SELECTED_MAX[2] - SELECTED_MIN[2]),
     )
-    isSelected = dist(px1,selected_color) < 30 and dist(px2,selected_color) < 30
+    isSelected = sdist(px1,selected_color) < 900 and sdist(px2,selected_color) < 900
     print(hasHealth, isFull, isSelected)
     return hasHealth, isFull, isSelected
 
@@ -182,7 +182,7 @@ def manage_inventory():
             print('meat match')
             return True
         elif m1 != None and m2 != None:
-            return dist(m1[0],m2[0]) < 16
+            return sdist(m1[0],m2[0]) < 256 #16
     
     for i in range(6):
         pole = slot_state(i,im)
@@ -255,11 +255,11 @@ def status_pixel(i, im=None):
     return im.getpixel((x,y))
 
 def got_pickup(im=None):
-    t1=t.time()
+
     if im == None:
         im = iGrab.grab()
     for i in range(2,6):
-        if dist(status_pixel(i,im), (88,102,67)) < 15:
+        if sdist(status_pixel(i,im), (88,102,67)) < 225: #15:
             return True
     return False
 
@@ -304,7 +304,7 @@ def open_chest():
         im = iGrab.grab()
         pxl = im.getpixel(CHEST_TEXT_VERIFY)
         pxl2 = im.getpixel(CHEST_TEXT_VERIFY_SMALL)
-        if dist(pxl, CHEST_TEXT_COL) < 10 or dist(pxl2, CHEST_TEXT_COL) < 10:
+        if sdist(pxl, CHEST_TEXT_COL) < 100 or sdist(pxl2, CHEST_TEXT_COL) < 100:
             return im
         t.sleep(0.2)
 
@@ -328,7 +328,7 @@ def deposit_items(im=None):
         for fsh in fish_names[3:] + ['pistolbullet', 'fat', 'scrap', 'card', 'cloth',]:
             fsh_pos = match_template(templates[fsh], im, 0.98, inv_box)
             if fsh_pos:
-                if any([dist(p, fsh_pos[0]) < SLOT_SIZE / 2 for p in last_clicks ]):
+                if any([ sdist(p, fsh_pos[0]) < SLOT_SIZE for p in last_clicks ]):
                     return False
                 new_clicks.append(fsh_pos[0])
                 pag.moveTo(fsh_pos[0])

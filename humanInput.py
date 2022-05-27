@@ -100,6 +100,65 @@ def rotate(item, vx, vy):
     vy.value += y
 
 
+def play_thread_func2(x,y, speed, q, vx, vy):
+    using = None
+    start_time = None
+    strings = ''
+    recieved = None
+    while True:
+        try:
+            recieved = q.get(block=False)
+
+            start_pos = [vx.value, vy.value]
+
+            rx = x - start_pos[0]
+            ry = y - start_pos[1]
+
+            act = recieved
+        
+            xscale = (rx)/act.destination[0]
+            yscale = (ry)/act.destination[1]
+            
+            tscale = speed/act.destination[2]
+        
+        
+            act_pos = [0,0,0]
+            old_scaled_pos = (0,0,0)
+
+            scaled_items = []
+            for item in act.items:
+                act_pos[0] += item[0]
+                act_pos[1] += item[1]
+                act_pos[2] = item[2]
+                    
+                new_scaled_pos = (round(act_pos[0] * xscale), round(act_pos[1] * yscale))
+                dx = new_scaled_pos[0] - old_scaled_pos[0] 
+                dy = new_scaled_pos[1] - old_scaled_pos[1]
+                dt = item[2] * tscale
+                #print('act pos', act_pos, 'dd',dx,dy)
+                old_scaled_pos = new_scaled_pos
+                scaled_items.append([dx,dy,dt])
+
+            using=scaled_items
+            start_time = t.time()
+        except queue.Empty:
+            if using and len(using):
+                new_time = t.time()
+                next_item = using[0]
+                strings += '\n> ' + str(new_time) + '_' + str(start_time) + '==' + str(new_time- start_time) + str( next_item)
+                
+                while new_time - start_time >= next_item[2] and using and len(using):
+                    del using[0]
+                    start_time += next_item[2]
+                    rotate(next_item, vx, vy)
+                    if len(using) == 0:
+                        return
+                    next_item = using[0]
+
+            else:
+                print('STRINGS\n' + strings)
+                return
+
 def play_thread_func(q, vx, vy):
     using = None
     start_time = None
@@ -183,83 +242,26 @@ class Mouse(object):
         return bests[chosen]
 
     
-    def rotate_to(self, x,y, speed, method=WHIP_ACTIONS):
+    def rotate_to(self, x,y, speed=1, method=WHIP_ACTIONS):
         if self.vx.value == x and self.vy.value == y and (self.play_thread and not self.play_thread.is_alive()):
             return
-        it = 0
-        start_pos = [self.vx.value, self.vy.value]
-        #print('start = ', start_pos)
-        #TODO
-        ''' 
-        for i,item in enumerate(self.performing):
-            it += item[2]
-            if it >= ACTION_BLENDING:
-                self.performing = self.performing[:i]
-                break
-            blend = (ACTION_BLENDING - it) / ACTION_BLENDING
-            item[0] = round(item[0] * blend)
-            item[1] = round(item[1] * blend)
-            start_pos[0] += item[0]
-            start_pos[1] += item[1]
-            '''
 
+        start_pos = [self.vx.value, self.vy.value]
         rx = x - start_pos[0]
         ry = y - start_pos[1]
-        t1 = t.time()
         act = self.choose_action(rx, ry, method)
-        t2 = t.time()
-        
-        xscale = (rx)/act.destination[0]
-        yscale = (ry)/act.destination[1]
-        
-        tscale = speed/act.destination[2]
-        
-        
-        act_pos = [0,0,0]
-        old_scaled_pos = (0,0,0)
-        #if len(self.performing) < len(act.items):
-        #    self.performing += [0] * (len(act.items) - len(self.performing))
-        scaled_items = []
-        for item in act.items:
-            act_pos[0] += item[0]
-            act_pos[1] += item[1]
-            act_pos[2] = item[2]
-                
-            new_scaled_pos = (round(act_pos[0] * xscale), round(act_pos[1] * yscale))
-            dx = new_scaled_pos[0] - old_scaled_pos[0] 
-            dy = new_scaled_pos[1] - old_scaled_pos[1]
-            dt = item[2] * tscale
-            #print('act pos', act_pos, 'dd',dx,dy)
-            old_scaled_pos = new_scaled_pos
-            scaled_items.append([dx,dy,dt])
-
-        t3 = t.time()
-        def get_key(item):
-            return item[2]
-        
-        #print(self.performing,'\n\n\n', scaled_items)
-
-
-        print('INFO',act.destination, speed, destination(scaled_items))
-        
-        self.play(scaled_items) #sorted(self.performing + , key=get_key)
-        print('CHOSE',t2-t1,t3-t2, t3-t.time() )
-        #self.performing = 
+        self.play(x,y,speed,act)
             
             
 
 
-    def play(self, action):
-        print('playing', len(action), destination(action))
-        t1 = t.time()
+    def play(self, x, y, speed, action):
         self.action_queue.put(action)
         if not self.play_thread or not self.play_thread.is_alive():
-            self.play_thread = threading.Thread(target=play_thread_func, daemon=True, args=(self.action_queue, self.vx, self.vy))
+            self.play_thread = threading.Thread(target=play_thread_func2, daemon=True, args=(x, y, speed, self.action_queue, self.vx, self.vy))
             self.play_thread.start()
-        print('PLAY TIME', t.time()-t1)
     
-            
-    
+
 def record_action_list(path='temp.txt'):
     pos = pag.position()
     while True:
@@ -324,22 +326,16 @@ rr = record_action_list
 if __name__ == '__main__':
     mm = Mouse()
     t.sleep(1)
-    t1 = t.time()
-    mm.rotate_to(100,10,0.1)
-    mm.play_thread.join()
-    print('time',t.time()-t1)
-    #t.sleep(0.3)
-    print('VXVY',mm.vx, mm.vy)
-    #t.sleep(0.7)
-    #print('VXVY',mm.vx, mm.vy)
-    #t.sleep(1)
-
-    '''mm.rotate_to(-100,-10,1)
-    t.sleep(0.3)
-    print('VXVY',mm.vx, mm.vy)
-    t.sleep(0.7)
-    print('VXVY',mm.vx, mm.vy)
-    t.sleep(2)'''
+    avgn = 0
+    avgo = 0
+    for i in range(20):
+        t.sleep(0.2)
+        t1 = t.time()
+        mm.rotate_to(100,10,0.1)
+        t2 = t.time()
+        mm.play_thread.join()
+        t3 = t.time()
+        print('time',t2-t1, t3-t2)
 
 '''
 ACTION_BLENDING = 0.3

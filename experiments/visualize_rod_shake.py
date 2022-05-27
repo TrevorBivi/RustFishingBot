@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
-
+import random as r
 import json
+from scipy.stats import linregress
 
 def dist (p1, p2):
     return sum([ (p1[i] - p2[i])**2 for i in range(2)]) ** 0.5
@@ -8,9 +9,9 @@ def dist (p1, p2):
 def sse(ll):
     if len(ll) < 2:
         return 0
-    #avg = sum([l[0] for l in ll])/len(ll)
+    avg = sum([l[0] for l in ll])/len(ll)
     avgy = sum([l[1] for l in ll])/len(ll)
-    return sum([ ( abs(xi[1] - avgy)**2)   for xi in ll]) # abs(xi[0] - avg)**2 + 
+    return sum([ (abs(xi[0] - avg)**2  + abs(xi[1] - avgy)**2)   for xi in ll])
 
 def abse(ll):
     if len(ll) < 2:
@@ -125,6 +126,7 @@ def trav(ll):
     last_y = ll[0][1]
     
 
+    
     for i in range(1,len(ll)):
         ret += dist( (last_x, last_y), (ll[i][0], ll[i][1]))
         last_x = ll[i][0]
@@ -141,19 +143,56 @@ def area(ll):
     
 
 catch_points = []
-with open('dbg\\catches.txt', 'r') as f:
+with open('..\dbg\\catches.txt', 'r') as f:
     dat = f.read()
     for s in dat.split('\n'):
         if len(s):
             catch_points.append(json.loads(s))
 
 snap_points = []
-with open('dbg\\snaps.txt', 'r') as f:
+with open('..\dbg\\snaps.txt', 'r') as f:
         dat = f.read()
         points = []
         for s in dat.split('\n'):
             if len(s):
                 snap_points.append(json.loads(s))
+
+def linr(ll):
+    if len(ll) < 4:
+        return 0
+    xs = []
+    ys = []
+    for p in ll:
+        xs.append(p[0])
+        ys.append(p[1])
+    #print(ll)
+    #print(';;')
+    # print(xs)
+    # print('pp')
+    # print(ys)
+    res = linregress(xs,ys)
+    return abs(res.rvalue)
+
+def linr_i(ll, i):
+    vs = []
+    ts = []
+    for p in ll:
+        vs.append(p[i])
+        ts.append(p[2])
+    res = linregress(vs,ts)
+    return abs(res.rvalue)
+
+def sse_i(ll,i):
+    if len(ll) < 2:
+        return 0
+    avg = sum([l[i] for l in ll])/len(ll)
+    return sum([ (xi[i] - avg)**2 for xi in ll])
+    
+def sse_r(ll, scale_y = 1):
+    return sse(ll) * (1-linr(ll))
+
+def sse_r2(ll, scale_y = 1):
+    return sse_i(ll,0) * (1-linr_i(ll,0)) + (sse_i(ll,1) * (1-linr_i(ll,1))) * scale_y
 
 
 def plotfig(fff, samples_min, samples_max, name = None , itera = 2):
@@ -162,9 +201,10 @@ def plotfig(fff, samples_min, samples_max, name = None , itera = 2):
 
     print('plotting', name)
 
-    sz = '.'
+    sz = ','
     for samples in range(samples_min, samples_max, itera):
         plt.clf()
+        print('doing ', samples)
         for i in range(160):
         
             for pl in catch_points:
@@ -184,7 +224,7 @@ def plotfig(fff, samples_min, samples_max, name = None , itera = 2):
                         y = fff([  lli for lli in pl[i:min(i+samples, len(pl))] ])
                         plt.plot(x, y, sz, color='red')
 
-        plt.savefig('plots\\' + name + '_' + str(samples) + '.png')
+        plt.savefig('..\\plots\\' + name + '_' + str(samples) + '.png')
 
 
 
@@ -207,44 +247,104 @@ class snap_detector:
             if self.max_passing <= self.loops_passing:
                 self.passes = True
                 break
-sds = []
-fails = 0
-passess = 0
-for pl in catch_points:
-    def passes(ll):
-        #print('vv',ldist(der(ll)))
-        return ldist(der(ll)) > 5844.155
+
+#plotfig( lambda ll : sse_r(ll), 4, 28, 'sse_r(pos) s-')
+#plotfig( lambda ll : sse_r(der(ll)), 8, 28, 'sse_r(vel) s-')
+#raise Exception()
+
+datas = []
+for acc_ratio in (1, 0.8, 0.6, 0.4, 0.2):
+    best = 999999999
+    chosen = None
+
+
+    for scale_y in (0.7, 0.9, 1, 1.1, 1.3):
+        for max_passing in range(3, 18, 3):
+            for min_err in range(500000, 1300000, 50000):
+                for calc_passes in range(14,24,3):
+                    test = {'accratio': acc_ratio, 'scale_y': scale_y, 'max_passing': max_passing, 'minerr': min_err, 'calc passes': calc_passes}
+                    
+                    fails = 0
+                    passess = 0
+                    for pl in catch_points:
+                        def passesf(ll):
+                            #print('compare' ,sse_r(der(ll)) , min_err)
+                            #print('vv',ldist(der(ll)))
+                            return sse_r2(der(ll), scale_y) > min_err
+                        
+                        sd = snap_detector(pl, passesf, calc_passes, False, max_passing)
+                        sd.check()
+                        if sd.passes == sd.should_pass:
+                            passess += 1
+                        else:
+                            fails += 1
+                    snap_fails = 0
+                    snap_passes = 0
+                    for pl in snap_points:
+                        def passesf(ll):
+                            if pl[0][2] - ll[0][2] < 4.1:
+                                return False
+                            #print('vv',ldist(der(ll)))
+                            return sse_r2(der(ll), scale_y) > min_err
+                        
+                        sd = snap_detector(pl, passesf, calc_passes, True, max_passing)
+                        sd.check()
+                        if sd.passes == sd.should_pass:
+                            passess += 1
+                            snap_passes += 1
+                        else:
+                            fails += 1
+                            snap_fails += 1
+                    
+                    ratio = snap_fails / max(1, snap_passes) + fails/max(1, passess) * acc_ratio
+                    print('tested ',test,'\n total', fails, passess, 'snap', snap_passes, snap_fails, 'ratio', ratio)
+                    
+                    if ratio < best:
+                        best = ratio
+                        chosen = {'accratio': acc_ratio, 'scale_y': scale_y, 'max_passing': max_passing, 'minerr': min_err, 'calc passes': calc_passes}
+    value = (snap_fails/max(1, snap_passes), fails/max(1,passess), best, chosen)
+    datas.append( value )                    
+    print(datas)
+import pygame
+from math import *
+import math as m
+from basicHelpers import *
+#from persp_proj_tests import *
+
+WINDOW_SIZE =  800
+ROTATE_SPEED = 3.141592 * 0.01
+window = pygame.display.set_mode( (2560//2, 1440//2) )
+clock = pygame.time.Clock()
+
+
+ll = []
+while True:
+    clock.tick(60)
+    window.fill((0,0,0))
+    if len(ll):
+        pos = ll.pop(-1)
+        print('draw',pos)
+        pygame.draw.circle(window, (0,0,255), (pos[0]-1700, pos[1]-600) , 2)
+    pygame.display.update()
+        
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            pygame.quit()
+        
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_r]:
+            ll = snap_points[r.randint(0,len(snap_points)-1)][:]
+        elif keys[pygame.K_a]:
+            ll = catch_points[r.randint(0,len(catch_points)-1)][:]
+        
+        else:
+            continue
+        
+        #print(angle_x, angle_y, angle_z)
+        
     
-    sd = snap_detector(pl, passes, 30, False)
-    sd.check()
-    if sd.passes == sd.should_pass:
-        passess += 1
-    else:
-        fails += 1
-    sds.append(sd)
+#im = 
 
-print('catch pass',passess,'fails',fails)
-
-sds = []
-fails = 0
-passess = 0
-for pl in snap_points:
-    def passes(ll):
-        if pl[0][2] - ll[0][2] < 4.1:
-            return False
-        #print('vv',ldist(der(ll)))
-        return ldist(der(ll)) > 5844.155
-    
-    sd = snap_detector(pl, passes, 30, True)
-    sd.check()
-    if sd.passes == sd.should_pass:
-        passess += 1
-    else:
-        fails += 1
-    sds.append(sd)
-print('snap pass',passess,'fails',fails)
-
-plotfig( lambda ll : sse(ll), 8, 20, 'sse y (pos) s-')
 
 #plotfig( lambda ll : lrootdist(der(der(ll))), 4, 25, 'rootldist(acc) s-')
 #plotfig( lambda ll : abse(ll), 4, 25, 'abse(pos) s-')

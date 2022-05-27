@@ -140,7 +140,7 @@ class Fisher(object):
         self.rm_button('left')
         t.sleep(1)
         
-        self.rotate_to(g(20),20,)
+        self.rotate_to(g(20),3,)
         t.sleep(g(2))
         #if self.first_rot < 35:
         #    self.rotate_to(g(40))
@@ -161,50 +161,102 @@ class Fisher(object):
         dbg('%event_wait')
         
     def track_band(self, im):
+        dbg('@track_band')
         debug = True
+
+        if self.mouse.play_thread.is_alive():
+            dbg('%track_band - mouse movement left')
+            return
 
         if im == None:
             im = iGrab.grab()
         x_pos = 0
         y_pos = 0
         samples = 0
+        #lines = 0
         
+        chan_max = lerp(self.brightness, LINE_BRIGHTNESS_CURVE)
         def is_line(px):
-            chan_max = lerp(self.brightness, LINE_BRIGHTNESS_CURVE)
             if px[0] <= chan_max and px[1] <= chan_max and px[2] <= chan_max:
                 return True
             return False
-
-        for x in range(PULLING_TL[0]-100, PULLING_BR[0]+100, 3):
-            for y in range(PULLING_TL[1]-100, PULLING_BR[1]+100, 3):
+        matches = []
+        for y in range(SHAKE_BR[1], SHAKE_TL[1], -SHAKE_SPEED):
+            xmatches = []
+            for x in range(SHAKE_TL[0], SHAKE_BR[0], SHAKE_SPEED):
                 px = im.getpixel((x,y))
                 if is_line(px):
-                    x_pos += x
-                    y_pos += y
-                    samples += 1
+                    xmatches.append((x,y))
                     if debug:
-                        im.putpixel((x,y), (255,0,255))
-                else:
-                    if debug:
-                        im.putpixel((x,y), (0,255,0))
+                        im.putpixel((x,y), (255,0,0))
+                #else:
+                    #if debug:
+                    #    im.putpixel((x,y), (px[0],px[1] // 2 + 128,px[2]))
+            if len(xmatches) > 5:
+                matches += xmatches
+                samples += len(xmatches)
+                #lines += 1
+                #if lines >= 4:
+                #    break
+
+ 
+
         #if samples > 3:
-#
-        if samples == 0:
-            self.band_positions.append((PULLING_TL[0]-100   , PULLING_BR[1]+100, t.time(), samples))
+        #print('SYPOSSS',x_pos, y_pos)
+
+        if len(matches) == 0:
+            self.band_positions.append((SHAKE_TL[0]   , SHAKE_BR[1], t.time(), samples))
+
+            #if debug:
+            #    im.putpixel((1,0), (255,255,255))
+            #    im.putpixel((3,0), (255,255,255))
+        
         else:
-            self.band_positions.append((x_pos/samples, y_pos/samples, t.time(), samples))
-        self.band_positions = self.band_positions[-6:]
+            for x,y in matches:
+                if debug:
+                    im.putpixel((x,y), (0,0,255))
+                x_pos += x
+                y_pos += y
+            x_pos /= len(matches)
+            y_pos /= len(matches)
+        
+            self.band_positions.append((x_pos, y_pos, t.time(), samples))
+            if debug:
+                #px = im.getpixel( (round(x_pos), round(y_pos) ))
+                im.putpixel((round(x_pos), round(y_pos) ), (255,255,255) )
+
+        
+        self.band_positions = self.band_positions[-40:]
         if False:#debug:
             rt = str(t.time())
             rt = rt[rt.index('.') - 5: rt.index('.') + 3]
 
             im.save('dbg\\acc' + '_' + rt + '.png')
-        print('ROD x_pos',x_pos, 'y_pos', y_pos)
+        #print('ROD x_pos',x_pos, 'y_pos', y_pos)
     
-    def band_acceleration(self):
-        if len(self.band_positions) < 5:
-            return 0
+    dbg('%track_band')
+    
+    def band_score(self):
+        use = self.band_positions[-6:]
+        sample_count = len(use)
         
+        if sample_count < 3:
+            return 0
+        avgx = 0
+        avgy = 0
+        
+        for s in self.band_positions:
+            avgx += s[0]
+            avgy += s[1]
+        avgx /= sample_count
+        avgy /= sample_count
+        err = 0
+        for s in self.band_positions:
+            err += abs(avgy - s[1])
+        err /= sample_count
+        return err
+            
+        '''
         last_x = self.band_positions[1][0]
         last_y = self.band_positions[1][1]
         last_t = self.band_positions[1][2]
@@ -238,7 +290,7 @@ class Fisher(object):
             err += (vl[0] - avg_vx) ** 2 + (vl[1] - avg_vy) ** 2
 
         print('RODacc', acc / samples / 100)
-        return err / samples / 100000000000000
+        return err / samples / 100000000000000'''
 
 
     def handle_pull(self):
@@ -251,8 +303,8 @@ class Fisher(object):
                 dbg('%handle_pull - event')
                 return event
         
+        chan_max = lerp(self.brightness, LINE_BRIGHTNESS_CURVE)
         def is_rod(px):
-            chan_max = lerp(self.brightness, LINE_BRIGHTNESS_CURVE)
             if px[0] <= chan_max and px[1] <= chan_max and px[2] <= chan_max:
                 return True
         
@@ -317,18 +369,20 @@ class Fisher(object):
             if self.fishing_left and not old_fishing_left:
                 print('ROTTEATE LEFT!!!!')
                 #self.switch_keys(['d'])
-                self.rotate_to(-10,0,0.2)
+                self.rotate_to(-10, 0, 0.25)
+                #self.band_positions = []
             elif not self.fishing_left and old_fishing_left:
                 print('ROTTEATE RIGH    T!!!!')
                 self.rotate_to(50, 0, 3 )
             #else:
                 #print('no action', self.brightness)
 
+        chan_max = 95 * self.brightness + 0
         def is_line(x,y):
             px = im.getpixel((x,y))
-            chan_max = 95 * self.brightness + 0
             if px[0] <= chan_max and px[1] <= chan_max and px[2]  <= chan_max:
                 return True
+
         runtime = t.time()
         def get_height():
             nonlocal im
@@ -341,7 +395,7 @@ class Fisher(object):
             #print('R',runtime, 'sdminl', min_l, 'maxl', max_l)
             water_height_line = Line( min_l, max_l )
             iter_dist = 0
-            line_iter = water_height_line.get_iter()
+            line_iter = water_height_line.get_iter(WATER_HEIGHT_SPEED)
             water_height = 0
             for (x, y) in line_iter:
                 #print('iter ', x,y)
@@ -374,7 +428,7 @@ class Fisher(object):
                     break
                 elif debug:
                     pass#im.putpixel((x, y), (150,150,150))   
-                iter_dist += 1
+                iter_dist += WATER_HEIGHT_SPEED
             return water_height
 
 
@@ -389,7 +443,7 @@ class Fisher(object):
         pp2 = persp_proj(FISH_LEFT_P2, rot)
 
         scan_line = Line(pp2,pp1)
-        scan_iter = scan_line.get_iter()
+        scan_iter = scan_line.get_iter(2)
         #print('P1', pp1, 'P2', pp2)
         #print('rot' + str(rot) + 'MIN MAX' + str(scan_iter.min) + ', ' + str(scan_iter.max))
 
@@ -461,9 +515,6 @@ class Fisher(object):
             draw.line((scan_l, scan_f), fill=(0,250,0))
             draw.line((scan_f, scan_r), fill=(0,250,0))
 
-
-        if debug: #self.fishing_left:
-            #im = im.crop((0,1440//3,2560//2,1440))
             im = im.crop((0,0,2560,1440))
             im.thumbnail( (2560//2,1440//2  ) , Image.NEAREST)
             if self.fishing_left:
@@ -489,7 +540,7 @@ class Fisher(object):
         if not self.cooling:
             self.heat += last_action_time
             desired = self.desired_keys()
-            acc = self.band_acceleration()
+            #acc = self.band_acceleration()
             if self.heat > 1 and False: #acc >= 630:
                 if self.last_acc_high:
                     print('high accel',acc)
@@ -587,10 +638,10 @@ class Fisher(object):
         last_time = start_time
         new_time = start_time
         last_ims = []
-        iters = 0
+        itersi = 0
         datas = []
         self.band_positions = []
-
+        self.brightness = get_brightness(im)
         while not event or new_time - start_time > self.var['MAXWAIT']:
             last_time = new_time
             new_time = t.time()
@@ -604,42 +655,60 @@ class Fisher(object):
 
 
             self.track_band(im)
-            if len(self.band_positions):
-                datas.append(self.band_positions[0])
+            #if len(self.band_positions):
+            datas.append(self.band_positions)
+
             self.update_actions(time_change)
-            if iters % 3 == 0:
-                event = self.event_check(im)
-                self.brightness = get_brightness(im)
+            event = self.event_check(im)
+            #if itersi % 10 == 0:
+            #    self.brightness = get_brightness(im)
             
             
             #datas.append(self.band_acceleration())
             if debug:
-                last_ims.append(im)
+                last_ims.append(  im )
+
             #last_ims = last_ims[-110:]
-            iters += 1
-            if iters % 4 == 0:
+            itersi += 1
+            if itersi % 4 == 0:
                 
-                print('iter time', time_change, 'band_accel', self.band_acceleration())
+                print('iter time', time_change, 'band_accel', self.band_score())
             #t.sleep(max(0,self.var['SCANTIME'] - time_change))
             #print('sleeping', max(0,self.var['SCANTIME'] - time_change))
-        if abs(datas[0][2] - datas[-1][2]) < 15:
+        
+
+        
+        if len(datas) > 14 and abs(datas[-1][-1][2] - datas[0][0][2]) < 19:
+            
+            
             print('SAVE DATATE')
             if event == 'SNAP': 
                 dbg('# save snap pics')
                 with open('dbg\\snaps.txt', 'a+') as f:
-                    f.write(json.dumps(datas[ ::-1]) + '\n')
+                    f.write(json.dumps(( str(start_time)[7:12], datas)) + '\n')
                     #f.write(json.dumps(str(datas[ ::-1])) + '\n')
                 #for i, snap_im in enumerate(last_ims[-1:]):
                 #    snap_im.save('dbg\\' + str(new_time) + '_' + str(i) + '.png')
             elif event:
                 with open('dbg\\catches.txt', 'a+') as f:
-                    f.write(json.dumps(datas[ ::-1]) + '\n')
+                    f.write(json.dumps((str(start_time)[7:12], datas)) + '\n')
 
         if debug:
-            for sim in last_ims:
-                sim.thumbnail((1560//2, 1440//2), Image.NEAREST )
-                sim.save('dbg\\'  + str(iters) + str(event) + str(t.time())[8:14] + '.png')
+            ii = 0
+            for  sim in last_ims:
+                #print('WHY',SHAKE_TL, SHAKE_BR)
+                sim = sim.crop((SHAKE_TL[0], SHAKE_TL[1], SHAKE_BR[0],SHAKE_BR[1]))
+                time_text = 'errtxt'
+                if len(datas):
+                    time_text = str(datas[-1][-1][2] - datas[ii][-1][2])[:5]
 
+                #sim.thumbnail(( (PULLING_BR[0]+100 -  PULLING_TL[0]+100)//2 , 3000), Image.NEAREST )
+                sri = str(ii)
+                sri = '0' * (3-len(sri)) + sri
+                path = 'E:\\tempvideo\\fisher\\'
+                path += str(start_time)[7:12] + '-' + sri + '-' + time_text + '__'+ str(event) + '.png'
+                sim.save(path) # + str(score) + '__' 
+                ii += 1
 
         dbg('%handle_fight')
         return event
@@ -690,7 +759,7 @@ class Fisher(object):
             total_fish[ft] = 0
         while not self.maxtime or new_time - start_time < self.maxtime:
             last_result = None
-            for i in range(58): #range(self.var['FISHES_PER_ITER']):
+            for i in range(18): #range(self.var['FISHES_PER_ITER']):
                 print('PROG',t.time() - start_time,'/',self.maxtime)
                 self.event_wait(last_result)
                 
@@ -723,7 +792,6 @@ class Fisher(object):
             log(str(log_data))
             print('done loop')
             new_time = t.time()
-            input('DONE DATA GATHER')
             
         self.reset_rotation()
         return total_fish
@@ -753,12 +821,12 @@ class Fisher(object):
         for xi in range(x-w,x+w):
             for yi in range(y-3*w,y-w):
                 px = im.getpixel((xi,yi))
-                if dist(px,(115,140,68)) < 15:
+                if sdist(px,(115,140,68)) < 225: #15
                     
                     hasHealth = True
                     break
         px = im.getpixel(full)
-        isFull = dist(px,(227,227,227)) < 30
+        isFull = sdist(px,(227,227,227)) < 900 #30
         
         px1 = im.getpixel(selected1)
         px2 = im.getpixel(selected2)
@@ -767,7 +835,7 @@ class Fisher(object):
             SELECTED_MIN[1] + self.brightness * (SELECTED_MAX[1] - SELECTED_MIN[1]),
             SELECTED_MIN[2] + self.brightness * (SELECTED_MAX[2] - SELECTED_MIN[2]),
         )
-        isSelected = dist(px1,selected_color) < 30 and dist(px2,selected_color) < 30
+        isSelected = sdist(px1,selected_color) < 900 and sdist(px2,selected_color) < 900
         print(hasHealth, isFull, isSelected)
         return hasHealth, isFull, isSelected
 
