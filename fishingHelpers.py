@@ -246,20 +246,50 @@ def manage_inventory():
 
     return amntfish
 
+none_type = type(None)
+
 def status_pixel(i, im=None):
-    if im == None:
+    debug = True
+    if type(im) == none_type:
+        print("STATUS PIXEL GRABBING")
         im = iGrab.grab()
 
     x = STATUS_0_POS[0]
     y = STATUS_0_POS[1] - STATUS_HEIGHT * i
+    if type(im) == CroppedIm:
+        if debug == True:
+            im.put_pixel(x,y-2, (0,0,255))
+            im.put_pixel(x,y+2, (0,0,255))
+        return im.get_pixel(x,y)
     return im.getpixel((x,y))
+    
+
+class CroppedIm():
+    def __init__(self, im, left, top):
+        self.im = im
+        self.top = top
+        self.left = left
+    
+    def get_pixel(self, x,y):
+        x = x - self.left
+        y = y - self.top
+        px = self.im[y][x]
+        return px[2], px[1], px[0]
+    
+    def put_pixel(self, x, y, rgb, offset=True):
+        if offset:
+            x = x - self.left
+            y = y - self.top
+        self.im[y][x] = (*rgb,255)
 
 def got_pickup(im=None):
 
-    if im == None:
+    if type(im) == none_type:
+        print("GOT PICKUP GRABBING")
         im = iGrab.grab()
+
     for i in range(2,6):
-        if sdist(status_pixel(i,im), (88,102,67)) < 225: #15:
+        if sdist((88,102,67), status_pixel(i,im)) < 225: #15:
             return True
     return False
 

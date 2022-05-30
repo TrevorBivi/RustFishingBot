@@ -10,7 +10,7 @@ import math as m
 class LineIter(object):
     def __init__(self, p1, p2, speed=1, min_x = 0, max_x = SCREEN_SIZE[0], min_y = 0, max_y = SCREEN_SIZE[1]):
         self.line = Line(p1,p2)
-        
+        self.speed = speed
         self.min_x = min_x
         self.max_x = max_x
         self.min_y = min_y
@@ -36,12 +36,12 @@ class LineIter(object):
         return self
 
     def __next__(self):
+        #print('lineiter',self.line.p1, self.line.p2, ' cur', self.cur, 'minmax',self.min, self.max)
         ret = None
-        while ret == None:
+        while not ret:
             self.cur += self.iter_dir * self.speed
-            if self.cur == self.max:
+            if (self.iter_dir > 0 and self.cur >= self.max) or (self.iter_dir < 0 and self.cur <= self.max):
                 raise StopIteration
-            
             if self.dir == 'x':
                 ret = self.cur,self.line.fox(self.cur)
                 if not (self.min_y < ret[1] <self.max_y):
