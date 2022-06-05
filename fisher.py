@@ -1,10 +1,12 @@
+from model_stuff.rod_heat.rodHeatManager import RodHeatManager
+
 import time as t
 #from scipy.stats import linregress
 from PIL import ImageDraw, Image
 import mss
 
 from sympy import Q
-from model_stuff.rod_heat.rodHeatManager import RodHeatManager
+
 from settings import *
 from basicHelpers import *
 from fishingHelpers import *
@@ -50,6 +52,8 @@ class Fisher(object):
         self.first_rot = None
 
         self.mouse = Mouse()
+        self.heats = []
+        self.temp_heat_tracker = False
         
     def rotate_to(self, rx, ry, speed=1, ignore_cap=False):
         dbg('@rotate_to',1)
@@ -131,6 +135,7 @@ class Fisher(object):
         self.brightness = get_brightness(im)
         self.band_positions = []
         self.band_track_length = 8
+        self.last_pull_time = None
        
         if self.active_rod(im) == None:
             pressSlot(self.inactive_rod(im))
@@ -144,7 +149,7 @@ class Fisher(object):
         self.rm_button('left')
         t.sleep(1)
         
-        self.rotate_to(g(20),3,)
+        self.rotate_to(g(25),3,)
         t.sleep(g(2))
         #if self.first_rot < 35:
         #    self.rotate_to(g(40))
@@ -177,6 +182,7 @@ class Fisher(object):
         x_pos = 0
         y_pos = 0
         samples = 0
+
         
         chan_max = lerp(self.brightness, LINE_BRIGHTNESS_CURVE)
         def is_line(px):
@@ -371,6 +377,7 @@ class Fisher(object):
                     
                     if is_rod(px):
                         print('HOOKED')
+                        self.last_pull_time = t.time()
                         self.switch_keys(['s','d'])
                         '''for time_length in (self.var['FIRST_PULL_TIME'], self.var['FIRST_COOL_TIME']):
                             test_time = t.time()
@@ -600,30 +607,37 @@ class Fisher(object):
 
     def update_actions(self, last_action_time):
         dbg('@update_actions')
-        print('update time', last_action_time)
+        #print('update time', last_action_time)
         if self.cooling:
-            print('cooling')
+            dbg('cooling',1)
             self.switch_keys([])
             self.heat -= last_action_time
             if self.heat <= 0:
+                self.heats = []
                 self.cooling = False
+                self.temp_heat_tracker = False
+                self.last_pull_time = t.time()
+
         if not self.cooling:
             self.heat += last_action_time
             desired = self.desired_keys()
             #acc = self.band_acceleration()
-            if self.heat > 1 and False: #acc >= 630:
-                if self.last_acc_high:
-                    print('high accel',acc)
-                    self.band_positions = []
-                    self.cooling = True
-                    self.heat = self.heat * 0.8 + 0.5
-                    self.switch_keys([])
-                self.last_acc_high = True
+            heat_val = sum(self.heats) / max(1, len(self.heats))
+            if heat_val > 76: #acc >= 630:
+                #if self.temp_heat_tracker == False:
+                #    self.temp_heat_tracker = True
+                #    #if r.randint(0,2) < 0:
+                dbg('CHOSE REST',1)
+                self.band_positions = []
+                self.heats = []
+                self.cooling = True
+                self.heat = self.heat ** 0.75
+                self.switch_keys([])
+                dbg('%update_actions wipe')
+                return True
             else:
-                self.last_acc_high = False
-                #print('fine accel',acc)
                 self.switch_keys(desired)
-
+        return False
         '''if self.cooling:
             self.heat -= self.var['COOLTIME'] * last_action_time
             if self.heat <= 0:
@@ -718,8 +732,9 @@ class Fisher(object):
         return ret
 
     def estimate_heat(self, time_change):
-        POINTS_LEN = 6
-        if len(self.band_positions) <= POINTS_LEN:
+        POINTS_LEN = 7
+        if len(self.band_positions) <= POINTS_LEN or time_change < 0.5:
+            dbg('skip heat est',1)
             return -1
         
         data = [self.band_positions[-1][0],self.band_positions[-1][1], time_change]
@@ -732,13 +747,15 @@ class Fisher(object):
             data.append(dx)
             data.append(dy)
             data.append(dt)
-        print('using data', data)
-        return self.rod_heat_manager.predict(data)
+        #print('using data', data)
+        ret = self.rod_heat_manager.predict(data)
+        dbg('heat est',1)
+        return ret
 
     def handle_fight(self):
         dbg('@handle_fight')
-
-        debug = True
+        self.temp_heat_tracker = False
+        debug = True# True
         with mss.mss() as sct:
             start_time = t.time()
             last_time = start_time
@@ -747,6 +764,7 @@ class Fisher(object):
             itersi = 0
             datas = []
             self.band_positions = []
+            self.last_pull_time = t.time()
             #self.brightness = get_brightness(im)
             print('grabbing',(*EVENT_GRAB_TL, *EVENT_GRAB_BR))
 
@@ -755,64 +773,69 @@ class Fisher(object):
 
             event = self.event_check(cropped_im)
             print('looping')
+
             while not event or new_time - start_time > self.var['MAXWAIT']:
                 last_time = new_time
                 new_time = t.time()
                 time_change = new_time - last_time
                 
-                dbg('* fight loop -  last time change' +  str(time_change) + ' bright' + str(self.brightness), 0 )
+                dbg('* fight loop -  last time change' +  str(time_change) + ' bright' + str(self.brightness) + ' heats' + str(self.heats), 1 )
                 cropped_im, cap_time = self.handle_angle_correction(sct)
-                
                 event = self.event_check(cropped_im)
-
                 new_pos = self.track_band(cropped_im, cap_time)
-                
-                if new_pos:
+                dbg('&fight - new pos' + str(new_pos), 1 )
+                if new_pos and not self.cooling:
                     datas.append(new_pos)
+                    self.heats.append(self.estimate_heat(new_time-self.last_pull_time))
+                    self.heats = self.heats[-3:]
+                    if debug:
+                        #print('HEAT ',heat_est)
+                        try:
+                            cropped_im.put_pixel(100,0, (255,255,0), False)
+                            cropped_im.put_pixel(200,0, (255,255,0), False)
+                            cropped_im.put_pixel(round(self.heats[-1])+100,0, (0,255,0), False)
+                            cropped_im.put_pixel(round(self.heats[-1])+100,1, (0,255,0), False)
+                            cropped_im.put_pixel(round(self.heats[-1])+100,2, (0,255,0), False)
+                        except Exception as e:
+                            print('HEAT ERR', e)
 
-                self.update_actions(time_change)
+                last_ims.append( cropped_im )
 
+                wipe = self.update_actions(time_change)
+                if wipe:
+                    last_ims = []
+                    datas = []
                 #if itersi % 10 == 0:
                 #    self.brightness = get_brightness(im)
                 
                 
                 #datas.append(self.band_acceleration())
-                if debug:
-                    heat_est = self.estimate_heat(new_time-start_time)
-                    print('HEAT ',heat_est)
-                    try:
-                        cropped_im.put_pixel(100,0, (255,255,0), False)
-                        cropped_im.put_pixel(200,0, (255,255,0), False)
-                        cropped_im.put_pixel(round(heat_est)+100,0, (0,255,0), False)
-                        cropped_im.put_pixel(round(heat_est)+100,1, (0,255,0), False)
-                        cropped_im.put_pixel(round(heat_est)+100,2, (0,255,0), False)
-                    except Exception as e:
-                        print('HEAT ERR', e)
-                    last_ims.append( cropped_im )
+
+                
 
                 #last_ims = last_ims[-110:]
-                itersi += 1
-                if itersi % 1 == 0:
+                #itersi += 1
+                #if itersi % 1 == 0:
                     
-                    print('iter time', time_change)
+                # #   print('iter time', time_change)
                 #t.sleep(max(0,self.var['SCANTIME'] - time_change))
                 #print('sleeping', max(0,self.var['SCANTIME'] - time_change))
             
-
-        print('SAVE DATATE')
-        if event == 'SNAP': 
-            dbg('# save snap pics')
-            with open('dbg\\snaps.txt', 'a+') as f:
-                f.write(json.dumps(( str(start_time)[6:12] + '_' +str(event), datas)) + '\n')
-                #f.write(json.dumps(str(datas[ ::-1])) + '\n')
-            #for i, snap_im in enumerate(last_ims[-1:]):
-            #    snap_im.save('dbg\\' + str(new_time) + '_' + str(i) + '.png')
-        elif event:
-            with open('dbg\\catches.txt', 'a+') as f:
-                f.write(json.dumps((str(start_time)[6:12] + '_' +str(event), datas)) + '\n')
-
+        if 1:
+            print('SAVE DATATE')
+            if event == 'SNAP': 
+                dbg('# save snap pics')
+                with open('dbg\\snaps.txt', 'a+') as f:
+                    f.write(json.dumps(( str(start_time)[6:12] + '_' +str(event), datas)) + '\n')
+                    #f.write(json.dumps(str(datas[ ::-1])) + '\n')
+                #for i, snap_im in enumerate(last_ims[-1:]):
+                #    snap_im.save('dbg\\' + str(new_time) + '_' + str(i) + '.png')
+            elif event:
+                with open('dbg\\catches.txt', 'a+') as f:
+                    f.write(json.dumps((str(start_time)[6:12] + '_' +str(event), datas)) + '\n')
+        self.mouse.play_thread.join()
         if debug and event == 'SNAP':
-            self.mouse.play_thread.join()
+            
             
             
 
@@ -836,17 +859,24 @@ class Fisher(object):
                 max_by = max(max_by, cim.left + cim.im.shape[0])
                 min_rx = min(min_rx, cim.left + cim.im.shape[1])
                 min_by = min(min_by, cim.left + cim.im.shape[0])
-            fps = len(last_ims)/(t.time() - start_time)
+            fps = len(last_ims)/(t.time() - self.last_pull_time)
             sims = []
             for cim in last_ims[:max(0,len(last_ims) - int(fps * 2.75))]:
                 
                 pim = Image.fromarray(cim.im)
-                sim = Image.new('RGBA', (max_rx - min_lx, max_by - min_ty), color=(0,0,0,255))
-                sim.paste(pim, (cim.left - min_lx, cim.top - min_ty   ))    
+                newsize = 1
+                if newsize != 1:
+                    pim = pim.resize(( pim.size[0] //newsize, pim.size[1]//newsize ))
+                sim = Image.new('RGBA', ((max_rx - min_lx)//newsize, (max_by - min_ty)//newsize), color=(0,0,0,255))
+                sim.paste(pim, ((cim.left - min_lx)//newsize, (cim.top - min_ty)//newsize   ))    
+                #sim = sim.crop
                 #sim = sim.crop((min_lx-cim.left, min_ty-cim.top, cim.size[0] + max_rx - (cim.left + cim.im.size[0])  ,  cim.size[1] + max_by - (cim.top + cim.im.size[1])  ))
                 sims.append(sim)
-
-            make_video(sims, str(start_time)[6:12] + '_' +str(event) + '.mp4', fps=(round(fps  )))
+            
+            time_text = str(start_time)[6:12]
+            if self.last_pull_time > start_time + 0.3:
+                time_text += '-mod+' + str( self.last_pull_time-start_time)[:5] 
+            make_video(sims, time_text + '_' +str(event) + '.mp4', fps=(round(fps  )))
             '''
             ii = 0
             for cim in last_ims:

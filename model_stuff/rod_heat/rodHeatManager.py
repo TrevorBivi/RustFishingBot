@@ -1,6 +1,11 @@
+if 1:
+    import os
+    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"   # see issue #152
+    os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+
+
 from keras.models import load_model
 import numpy as np
-
 class RodHeatManager:
     def __init__(self,path):
         self.path = path
