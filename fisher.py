@@ -4,6 +4,7 @@ from PIL import ImageDraw, Image
 import mss
 
 from sympy import Q
+from model_stuff.rod_heat.rodHeatManager import RodHeatManager
 from settings import *
 from basicHelpers import *
 from fishingHelpers import *
@@ -37,6 +38,7 @@ class Fisher(object):
         self.dx = 0
         self.dy = 0
         self.brightness = 1.0
+        self.rod_heat_manager = RodHeatManager(".\\model_stuff\\rod_heat\\rod_heat_model")
 
         self.last_pull_time = None
         self.last_cool_time = None
@@ -715,6 +717,24 @@ class Fisher(object):
         dbg('%event_check - rodsnapped=' + str(ret))
         return ret
 
+    def estimate_heat(self, time_change):
+        POINTS_LEN = 6
+        if len(self.band_positions) <= POINTS_LEN:
+            return -1
+        
+        data = [self.band_positions[-1][0],self.band_positions[-1][1], time_change]
+        for samp_ind in range(0, POINTS_LEN, 1):
+            samp = self.band_positions[-2-samp_ind]
+            next_samp = self.band_positions[-1-samp_ind]
+            dx = next_samp[0] - samp[0]
+            dy = next_samp[1] - samp[1]
+            dt = next_samp[2] - samp[2]
+            data.append(dx)
+            data.append(dy)
+            data.append(dt)
+        print('using data', data)
+        return self.rod_heat_manager.predict(data)
+
     def handle_fight(self):
         dbg('@handle_fight')
 
@@ -746,6 +766,7 @@ class Fisher(object):
                 event = self.event_check(cropped_im)
 
                 new_pos = self.track_band(cropped_im, cap_time)
+                
                 if new_pos:
                     datas.append(new_pos)
 
@@ -757,7 +778,16 @@ class Fisher(object):
                 
                 #datas.append(self.band_acceleration())
                 if debug:
-
+                    heat_est = self.estimate_heat(new_time-start_time)
+                    print('HEAT ',heat_est)
+                    try:
+                        cropped_im.put_pixel(100,0, (255,255,0), False)
+                        cropped_im.put_pixel(200,0, (255,255,0), False)
+                        cropped_im.put_pixel(round(heat_est)+100,0, (0,255,0), False)
+                        cropped_im.put_pixel(round(heat_est)+100,1, (0,255,0), False)
+                        cropped_im.put_pixel(round(heat_est)+100,2, (0,255,0), False)
+                    except Exception as e:
+                        print('HEAT ERR', e)
                     last_ims.append( cropped_im )
 
                 #last_ims = last_ims[-110:]

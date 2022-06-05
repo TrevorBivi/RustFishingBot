@@ -27,6 +27,7 @@ MOVE_ANGLE = TARGET_ANGLE - 60
 print(MOVE_ANGLE)
 dbg_time = t.time()
 
+PROJ_PATH = 'C:\\Users\\Monchy\\Documents\\RustFishingBot\\'
 
 LINE_BRIGHTNESS_CURVE = [
     (0.23, 0),
@@ -78,8 +79,8 @@ if SCREEN_SIZE == P1440:
     SHAKE_SPEED_Y = 4
     SHAKE_FAST_SPEED_Y = 12
     SHAKE_FAST_SPEED_X = 18
-    SHAKE_SLOW_WIDTH = 65
-    SHAKE_SLOW_HEIGHT = 45
+    SHAKE_SLOW_WIDTH = 70
+    SHAKE_SLOW_HEIGHT = 50
     
 
     FISH_LEFT_PLAYER = (1139,1439)
