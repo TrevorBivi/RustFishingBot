@@ -8,7 +8,7 @@ from settings import *
 from basicHelpers import *
 from fishingHelpers import *
 from humanInput import *
-
+from videoWrite import make_video #modded https://github.com/krishnachaitanya7/pil_video/blob/main/pil_video/pil_video.py
 pag.PAUSE = 0
 
 #[25,27,26], 21,23,22,   32,28,29,   35,30,27,   41,33,30  33, 28, 32
@@ -166,9 +166,9 @@ class Fisher(object):
         dbg('@track_band')
         debug = True
 
-        if self.mouse.play_thread.is_alive():
-            dbg('%track_band - mouse movement left')
-            return
+        #if self.mouse.play_thread.is_alive():
+        #    dbg('%track_band - mouse movement left')
+        #    return
 
         #if im == None:
         #    im = iGrab.grab()
@@ -182,48 +182,101 @@ class Fisher(object):
                 return True
             return False
         matches = []
-        dbg('&scanscart')
         dbg_scanned = 0
-        for y in range(SHAKE_BR[1]-im.top, SHAKE_TL[1]-im.top, -SHAKE_SPEED):
-            xmatches = []
-            for x in range(SHAKE_TL[0]-im.left, SHAKE_BR[0]-im.left, SHAKE_SPEED):
-                dbg_scanned += 1
-                px = im.im[y][x]
-                if is_line(px):
-                    xmatches.append((x,y))
+
+        def get_pos(min_x, min_y, max_x, max_y, speed_x, speed_y, min_row, draw=False):
+            x_pos = 0
+            y_pos = 0
+            samples = 0
+            for y in range(max_y, min_y, -speed_y):
+                x_matches = []
+                for x in range(min_x, max_x, speed_x):
+                    px = im.im[y][x]
+                    if is_line(px):
+                        if debug and draw:
+                            im.put_pixel(x,y, (0,255,0), offset=False)
+                        x_matches.append((x,y))
+                if len(x_matches) >= min_row:
+                    for match in x_matches:
+                        x_pos += match[0]
+                        y_pos += match[1]
+                        samples += 1
+            
+            return x_pos/max(1, samples), y_pos/max(1, samples), samples           
+        
+        dbg('&trackband start fast')
+
+        fast_x, fast_y, fast_samples = get_pos(
+            SHAKE_TL[0]-im.left,
+            SHAKE_TL[1]-im.top,
+            SHAKE_BR[0]-im.left,
+            SHAKE_BR[1]-im.top,
+            SHAKE_FAST_SPEED_X,
+            SHAKE_FAST_SPEED_Y,
+            2,
+            True )
+        fast_x += im.left
+        fast_y += im.top
+        dbg('&trackband done fast' + str(fast_samples))
+
+        if fast_samples:
+            max_slow_x = round(min(SHAKE_BR[0], fast_x + SHAKE_SLOW_WIDTH)) #Cap right
+            min_slow_x = round(max_slow_x - SHAKE_SLOW_WIDTH * 2)
+            min_slow_y = round(max(SHAKE_TL[1], fast_y - SHAKE_SLOW_HEIGHT)) # cap top
+            max_slow_y = round(min_slow_y + SHAKE_SLOW_HEIGHT * 2)
+        
+            
+
+            slow_x, slow_y, slow_samples = get_pos(
+                min_slow_x - im.left,
+                min_slow_y - im.top,
+                max_slow_x - im.left,
+                max_slow_y - im.top,
+                SHAKE_SPEED_X,
+                SHAKE_SPEED_Y,
+                7,
+                False)
+            slow_x += im.left
+            slow_y += im.top
+            dbg('&trackband end slow ' +  str(slow_samples))
+            if slow_samples:
+
+                if debug:
+                    im.put_pixel(round(SHAKE_TL[0]), round(SHAKE_TL[1]), (0,255,255) )
+                    im.put_pixel(round(SHAKE_TL[0]), round(SHAKE_BR[1]), (0,255,255) )
+                    im.put_pixel(round(SHAKE_BR[0]), round(SHAKE_TL[1]), (0,255,255) )
+                    im.put_pixel(round(SHAKE_BR[0]), round(SHAKE_BR[1]), (0,255,255) )
+                    im.put_pixel(round(min_slow_x), round(max_slow_y), (0,255,0) )
+                    im.put_pixel(round(min_slow_x), round(min_slow_y), (0,255,0) )
+                    im.put_pixel(round(max_slow_x), round(max_slow_y), (0,255,0) )
+                    im.put_pixel(round(max_slow_x), round(min_slow_y), (0,255,0) )
+                    im.put_pixel(round(min_slow_x), round(max_slow_y-1), (0,255,0) )
+                    im.put_pixel(round(min_slow_x), round(min_slow_y+1), (0,255,0) )
+                    im.put_pixel(round(max_slow_x), round(max_slow_y-1), (0,255,0) )
+                    im.put_pixel(round(max_slow_x), round(min_slow_y+1), (0,255,0) )
+
+                    
+                if slow_samples == 0:
+                    #self.band_positions.append((SHAKE_TL[0], SHAKE_BR[1], cap_time, samples))
+                    pass
                     #if debug:
-                    #    im.putpixel((x,y), (255,0,0))
-                #else:
-                #   if debug:
-                #   im.putpixel((x,y), (px[0],px[1] // 2 + 128,px[2]))
-            if len(xmatches) > 7:
-                matches += xmatches
-                samples += len(xmatches)
-        dbg('&scandone - ' + str(dbg_scanned))
-        if len(matches) == 0:
-            self.band_positions.append((SHAKE_TL[0], SHAKE_BR[1], cap_time, samples))
+                    #    im.putpixel((1,0), (255,255,255))
+                    #    im.putpixel((3,0), (255,255,255))
+                
+                else:
+                    self.band_positions.append((slow_x, slow_y, cap_time, samples))
+                    if debug:
+                        im.put_pixel(round(slow_x), round(slow_y), (255,255,255) )
+                        im.put_pixel(round(slow_x), round(slow_y+1), (255,255,255) )
+                        im.put_pixel(round(slow_x+1), round(slow_y), (255,255,255) )
+                        im.put_pixel(round(slow_x+1), round(slow_y+1), (255,255,255) )
+                    #    im.putpixel((round(x_pos), round(y_pos) ), (255,255,255) )
 
-            #if debug:
-            #    im.putpixel((1,0), (255,255,255))
-            #    im.putpixel((3,0), (255,255,255))
-        
-        else:
-            for x,y in matches:
-                #if debug:
-                #    im.putpixel((x,y), (0,0,255))
-                x_pos += x
-                y_pos += y
-            x_pos /= len(matches)
-            y_pos /= len(matches)
-            x_pos += im.left
-            y_pos += im.top
-            self.band_positions.append((x_pos, y_pos, cap_time, samples))
-            if debug:
-                im.put_pixel(round(x_pos), round(y_pos), (255,255,255) )
-            #    im.putpixel((round(x_pos), round(y_pos) ), (255,255,255) )
+                
+                    self.band_positions = self.band_positions[-40:]
+                    dbg('%track_band -- ret')
+                    return (slow_x, slow_y, cap_time, samples)
 
-        
-        self.band_positions = self.band_positions[-40:]
     dbg('%track_band')
     
     def band_score(self):
@@ -377,8 +430,10 @@ class Fisher(object):
         max_pl = persp_proj([ -0.1, self.var['WATER_MAX'], 0.2 ], rot)
         min_pl = persp_proj([ -0.1, self.var['WATER_MIN'], 0.2 ], rot)
 
+
+
         max_im_x = EVENT_GRAB_BR[0]
-        max_im_y = min(max(max_pl[1], min_pl[1], EVENT_GRAB_BR[1]), SCREEN_SIZE[1]) 
+        max_im_y = min(max(max_pl[1], min_pl[1], EVENT_GRAB_BR[1]), HOT_POS[1] - 2 ) 
 
         dbg('grabimg img ' + str((min_im_x, min_im_y, max_im_x, max_im_y)))
         cap_time = t.time()
@@ -398,6 +453,7 @@ class Fisher(object):
         iter_dist = 0
         line_iter = water_height_line.get_iter(WATER_HEIGHT_SPEED,0 , max_im_x - max_im_y, 0, max_im_y - min_im_y)
         water_height = 0
+        
         for (x, y) in line_iter:
             #print('iter ', x,y)
             pxl = np_im[y][x]
@@ -413,6 +469,8 @@ class Fisher(object):
                     self.var['WATER_MIN']
                 )
             iter_dist += WATER_HEIGHT_SPEED
+        dbg('&anglecorrect - gotheight ')
+
         height = water_height
         #print('out 1')
         ### GET SCAN LINE
@@ -425,7 +483,7 @@ class Fisher(object):
         pp2 = persp_proj(FISH_LEFT_P2, rot)
 
         scan_line = Line((pp2[0] - min_im_x, pp2[1] - min_im_y), (pp1[0] - min_im_x, pp1[1] - min_im_y))
-        scan_iter = scan_line.get_iter(2, 0, max_im_x - max_im_y, 0, max_im_y - min_im_y)
+        scan_iter = scan_line.get_iter(SCAN_LINE_SPEED, 0, max_im_x - max_im_y, 0, max_im_y - min_im_y)
 
         if debug:
             #print('putting', max_pl, cropped_im.left, cropped_im.top)
@@ -441,11 +499,14 @@ class Fisher(object):
                 return True
 
         self.fishing_left = False
+
+        last_pos = next(scan_iter) #None
+
         for x,y in scan_iter:
             #print('ITER33',x,y)
-            if hot_pos[1] < y+cropped_im.top < hot_pos[1] + SLOT_SIZE and hot_pos[0] < x+cropped_im.left < hot_pos[0] + SLOT_SIZE * 6:
-                continue
-            if debug:
+            #if hot_pos[1] < y+cropped_im.top < hot_pos[1] + SLOT_SIZE and hot_pos[0] < x+cropped_im.left < hot_pos[0] + SLOT_SIZE * 6:
+            #    continue
+            if debug and x % 4 == 0:
                 #print('put',x+1,y )
                 cropped_im.put_pixel(x+1,y, (0,0,255), False)
 
@@ -455,7 +516,20 @@ class Fisher(object):
                 self.fishing_left = True
                 if not debug:
                     break
-
+            #last_pos = (x,y)
+        else:
+            y = last_pos[1]
+            for dx in range(0,int(SCREEN_SIZE[0] * 0.5) - cropped_im.left - last_pos[0],SCAN_LINE_SPEED):
+                x = last_pos[0] + dx
+                pxl = np_im[y][x]
+                if debug and x % 4 == 0:
+                    #print('put',x+1,y )
+                    cropped_im.put_pixel(x+1,y, (0,0,255), False)
+                if is_line(x, y):
+                    self.fishing_left_time = t.time()
+                    self.fishing_left = True
+                    if not debug:
+                        break
             '''if debug:
                 if self.fishing_left:
                     im.putpixel((x,y), (0,255,0))
@@ -671,8 +745,9 @@ class Fisher(object):
                 
                 event = self.event_check(cropped_im)
 
-                self.track_band(cropped_im, cap_time)
-                datas.append(self.band_positions)
+                new_pos = self.track_band(cropped_im, cap_time)
+                if new_pos:
+                    datas.append(new_pos)
 
                 self.update_actions(time_change)
 
@@ -682,6 +757,7 @@ class Fisher(object):
                 
                 #datas.append(self.band_acceleration())
                 if debug:
+
                     last_ims.append( cropped_im )
 
                 #last_ims = last_ims[-110:]
@@ -693,30 +769,62 @@ class Fisher(object):
                 #print('sleeping', max(0,self.var['SCANTIME'] - time_change))
             
 
-        
-        if len(datas) > 14 and abs(datas[-1][-1][2] - datas[0][0][2]) < 19:
-            
-            
-            print('SAVE DATATE')
-            if event == 'SNAP': 
-                dbg('# save snap pics')
-                with open('dbg\\snaps.txt', 'a+') as f:
-                    f.write(json.dumps(( str(start_time)[7:12], datas)) + '\n')
-                    #f.write(json.dumps(str(datas[ ::-1])) + '\n')
-                #for i, snap_im in enumerate(last_ims[-1:]):
-                #    snap_im.save('dbg\\' + str(new_time) + '_' + str(i) + '.png')
-            elif event:
-                with open('dbg\\catches.txt', 'a+') as f:
-                    f.write(json.dumps((str(start_time)[7:12], datas)) + '\n')
+        print('SAVE DATATE')
+        if event == 'SNAP': 
+            dbg('# save snap pics')
+            with open('dbg\\snaps.txt', 'a+') as f:
+                f.write(json.dumps(( str(start_time)[6:12] + '_' +str(event), datas)) + '\n')
+                #f.write(json.dumps(str(datas[ ::-1])) + '\n')
+            #for i, snap_im in enumerate(last_ims[-1:]):
+            #    snap_im.save('dbg\\' + str(new_time) + '_' + str(i) + '.png')
+        elif event:
+            with open('dbg\\catches.txt', 'a+') as f:
+                f.write(json.dumps((str(start_time)[6:12] + '_' +str(event), datas)) + '\n')
 
-        if debug:
+        if debug and event == 'SNAP':
+            self.mouse.play_thread.join()
+            
+            
+
+            #make_video([Image.fromarray(cim.im) for cim in last_ims], str(start_time)[6:12] + '.mp4')
+            
+            max_lx = 0
+            min_lx = 9999
+            max_rx = 0
+            min_rx = 9999
+            max_ty = 0
+            min_ty = 9999
+            min_by = 9999
+            max_by = 0
+            for cim in last_ims:
+                min_lx = min(cim.left, min_lx)
+                max_lx = max(cim.left, max_lx)
+                max_ty = max(cim.top, max_ty)
+                min_ty = min(cim.top, min_ty)
+                #print('type', type(cim.im), type(cim.im.size), cim.im.size)
+                max_rx = max(max_rx, cim.left + cim.im.shape[1])
+                max_by = max(max_by, cim.left + cim.im.shape[0])
+                min_rx = min(min_rx, cim.left + cim.im.shape[1])
+                min_by = min(min_by, cim.left + cim.im.shape[0])
+            fps = len(last_ims)/(t.time() - start_time)
+            sims = []
+            for cim in last_ims[:max(0,len(last_ims) - int(fps * 2.75))]:
+                
+                pim = Image.fromarray(cim.im)
+                sim = Image.new('RGBA', (max_rx - min_lx, max_by - min_ty), color=(0,0,0,255))
+                sim.paste(pim, (cim.left - min_lx, cim.top - min_ty   ))    
+                #sim = sim.crop((min_lx-cim.left, min_ty-cim.top, cim.size[0] + max_rx - (cim.left + cim.im.size[0])  ,  cim.size[1] + max_by - (cim.top + cim.im.size[1])  ))
+                sims.append(sim)
+
+            make_video(sims, str(start_time)[6:12] + '_' +str(event) + '.mp4', fps=(round(fps  )))
+            '''
             ii = 0
             for cim in last_ims:
                 #print('WHY',SHAKE_TL, SHAKE_BR)
                 sim = Image.fromarray(cim.im)
                 sim = sim.crop((SHAKE_TL[0]-cim.left, SHAKE_TL[1]-cim.top, SHAKE_BR[0]-cim.left,SHAKE_BR[1]-cim.top))
                 time_text = 'errtxt'
-                if len(datas):
+                if len(datas) > ii and len(datas[-1]) and len(datas[ii]):
                     time_text = str(datas[-1][-1][2] - datas[ii][-1][2])[:5]
 
                 #sim.thumbnail(( (PULLING_BR[0]+100 -  PULLING_TL[0]+100)//2 , 3000), Image.NEAREST )
@@ -725,8 +833,9 @@ class Fisher(object):
                 path = 'E:\\tempvideo\\fisher\\'
                 path += str(start_time)[7:12] + '-' + sri + '-' + time_text + '__'+ str(event) + '.png'
                 sim.save(path) # + str(score) + '__' 
-                ii += 1
-
+                ii += 1'''
+            
+            print('done bs')
         dbg('%handle_fight')
         return event
 

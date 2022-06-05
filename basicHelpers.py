@@ -8,13 +8,14 @@ from PIL import ImageGrab as iGrab
 import math as m
 
 class LineIter(object):
-    def __init__(self, p1, p2, speed=1, min_x = 0, max_x = SCREEN_SIZE[0], min_y = 0, max_y = SCREEN_SIZE[1]):
+    def __init__(self, p1, p2, speed=1, min_x = 0, max_x = SCREEN_SIZE[0], min_y = 0, max_y = SCREEN_SIZE[1], cap_bounds=False):
         self.line = Line(p1,p2)
         self.speed = speed
         self.min_x = min_x
         self.max_x = max_x
         self.min_y = min_y
         self.max_y = max_y
+        self.cap_bounds = cap_bounds
 
         if abs(p2[0] - p1[0]) > abs(p2[1] - p1[1]):
             self.dir = 'x'
