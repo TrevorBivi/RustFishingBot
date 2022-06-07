@@ -8,6 +8,8 @@ import numpy as np
 import random as r
 import time as t
 import json
+#import konverter
+
 #from tensorflow.keras.models import load_model
 # load the dataset
 import pandas as pd
@@ -23,9 +25,9 @@ catch_dict = {}
 rec_times = []
 rec_lens = []
 
-POINTS_LEN = 7
+POINTS_LEN = 9
 CUT_TIME = 4.4
-TRAIN_PERC = 0.982
+TRAIN_PERC = 0.93
 
 inp_datas = []
 out_datas = []
@@ -65,7 +67,7 @@ def get_frames(sesh_list):
             continue
 
         for pos_ind in range(POINTS_LEN, end_index):
-            frame = [sesh[pos_ind][0], sesh[pos_ind][1], sesh[pos_ind][2] - start_time]
+            frame = [sesh[pos_ind][0] - 1760, sesh[pos_ind][1] - 880, sesh[pos_ind][2] - start_time]
             for samp_ind in range(0, POINTS_LEN, 1):
                 samp = sesh[pos_ind -samp_ind-1]
                 next_samp = sesh[pos_ind -samp_ind]
@@ -104,9 +106,11 @@ model = Sequential()
 model.add(Dense(POINTS_LEN * 3 + 3, input_dim=(POINTS_LEN * 3 + 3), activation='relu'))
 #model.add(BatchNormalization())
 #model.add(Dense((POINTS_LEN + 1)*2, activation='relu'))
-model.add(Dropout(0.075))
+model.add(Dropout(0.1))
 model.add(Dense((POINTS_LEN * 3 + 3), activation='relu'))
-model.add(Dropout(0.075))
+model.add(Dropout(0.1))
+model.add(Dense(8, activation='relu'))
+model.add(Dropout(0.05))
 model.add(Dense(1, activation='relu'))
 
 optimizer = Adam(
@@ -116,26 +120,42 @@ optimizer = Adam(
 model.compile(loss='mean_squared_error', optimizer=optimizer, metrics=['accuracy'])
 
 
-model.fit(train_data, train_out, epochs=250, batch_size=50, verbose=2)
+model.fit(train_data, train_out, epochs=120, batch_size=50, verbose=2)
+model.evaluate(test_data, test_out)
+#712
+#600
+#492 2?
+#553 4
+model.save(".\\model_stuff\\rod_heat\\rod_heat_model_5", save_format='h5')
+
+
+'''
 # make class predictions with the model
 predictions = model.predict(test_data)#(model.predict(inp_datas) > 0.5).astype(int)
 # summarize the first 5 cases
 for i in range(len(test_out)):
     print('%s => %d (expected %d)' % (test_data[i].tolist(), predictions[i], test_out[i]))
 
-model.save(".\\model_stuff\\rod_heat\\rod_heat_model")
+model.save(".\\model_stuff\\rod_heat\\rod_heat_model", save_format='h5')
+
+'''
+#konverter.konvert(".\\model_stuff\\rod_heat\\rod_heat_model.h5", output_file='examples/test_model')
+
 '''
 model_json = model.to_json()
 with open('rod_heat.json', 'w+') as json_file:
-    json_file.write(model_json)'''
+    json_file.write(model_json)
 
+'''
+
+'''
 
 model2 = RodHeatManager(".\\model_stuff\\rod_heat\\rod_heat_model")
 print('test load')
 t1 = t.time()
-pred1 = model2.predict( [1920.8902439024391, 827.0975609756098, 2.585576295852661, 0.023577235772563654, 1.8042276422764871, 0.017002582550048828, -19.19826839826851, -8.291082251082344, 0.032507896423339844, 10.680319680319599, 0.07159507159508394, 0.03399968147277832, -13.404858299595162, -5.697705802968926, 0.03400135040283203, -5.6893995552259184, -16.38102297998512, 0.031999826431274414, -9.056338028169193, -7.830985915492988, 0.016999244689941406, -2.229494614747182, -5.224523612261805, 0.03300189971923828] )
+pred1 = model2.predict( [1964.448275862069, 889.2068965517242, 3.946277618408203, 2.510222764723949, 1.1626487641135554, 0.03300046920776367, -8.009315323707597, 2.702142524452711, 0.032997846603393555, -4.350877192982352, 12.526315789473756, 0.03300023078918457, 1.420196833547152, 1.8401797175865795, 0.03300213813781738, -3.182820784729529, 12.627783669141081, 0.017460346221923828, -2.699130434782546, 2.107826086956493, 0.034718990325927734, -5.498064516129034, -3.001935483870966, 0.03200125694274902, -2.4619354838710024, 2.3059354838709396, 0.03299903869628906] )
 t2 = t.time()
 for i in range(1000):
-    pred2 = model2.predict( [1920.8902439024391, 827.0975609756098, 2.585576295852661, 0.023577235772563654, 1.8042276422764871, 0.017002582550048828, -19.19826839826851, -8.291082251082344, 0.032507896423339844, 10.680319680319599, 0.07159507159508394, 0.03399968147277832, -13.404858299595162, -5.697705802968926, 0.03400135040283203, -5.6893995552259184, -16.38102297998512, 0.031999826431274414, -9.056338028169193, -7.830985915492988, 0.016999244689941406, -2.229494614747182, -5.224523612261805, 0.03300189971923828] )
+    pred2 = model2.predict( [1964.448275862069, 889.2068965517242, 3.946277618408203, 2.510222764723949, 1.1626487641135554, 0.03300046920776367, -8.009315323707597, 2.702142524452711, 0.032997846603393555, -4.350877192982352, 12.526315789473756, 0.03300023078918457, 1.420196833547152, 1.8401797175865795, 0.03300213813781738, -3.182820784729529, 12.627783669141081, 0.017460346221923828, -2.699130434782546, 2.107826086956493, 0.034718990325927734, -5.498064516129034, -3.001935483870966, 0.03200125694274902, -2.4619354838710024, 2.3059354838709396, 0.03299903869628906] )
 t3 = t.time()
-print('time',t2-t2, (t3-t2)/1000, 'test', pred1,  pred2)#43
+print('time',t2-t2, (t3-t2)/1000, 'test', pred1,  pred2)#43'''

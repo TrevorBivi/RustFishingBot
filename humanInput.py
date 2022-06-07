@@ -10,6 +10,7 @@ import time as t
 import json
 
 import threading, queue
+import sys
 
 if __name__ == '__main__':
     import keyboard
@@ -100,7 +101,7 @@ def rotate(item, vx, vy):
     vy.value += y
 
 
-def play_thread_func2(x,y, speed, q, vx, vy):
+def play_thread_func2(q, vx, vy):
     using = None
     start_time = None
     strings = ''
@@ -111,15 +112,15 @@ def play_thread_func2(x,y, speed, q, vx, vy):
 
             start_pos = [vx.value, vy.value]
 
-            rx = x - start_pos[0]
-            ry = y - start_pos[1]
+            rx = recieved['x'] - start_pos[0]
+            ry = recieved['y'] - start_pos[1]
 
-            act = recieved
+            act = recieved['act']
         
             xscale = (rx)/act.destination[0]
             yscale = (ry)/act.destination[1]
             
-            tscale = speed/act.destination[2]
+            tscale = recieved['speed']/act.destination[2]
         
         
             act_pos = [0,0,0]
@@ -141,7 +142,10 @@ def play_thread_func2(x,y, speed, q, vx, vy):
 
             using=scaled_items
             start_time = t.time()
+            #print('\n\nGOT', recieved ,
+            #flush=True)
         except queue.Empty:
+            #print('.',end='', flush=True)
             if using and len(using):
                 new_time = t.time()
                 next_item = using[0]
@@ -163,11 +167,16 @@ def play_thread_func(q, vx, vy):
     using = None
     start_time = None
     strings = ''
+    print('RUN', flush=True)
     while True:
         try:
-            using = q.get(block=False)
-            start_time = t.time()
+            new = q.get(block=False)
+            if new:
+                print('GOT', flush=True)
+                start_time = t.time()
+                using = new
         except queue.Empty:
+            print('USE', flush=True)
             if using and len(using):
                 new_time = t.time()
                 next_item = using[0]
@@ -250,15 +259,22 @@ class Mouse(object):
         rx = x - start_pos[0]
         ry = y - start_pos[1]
         act = self.choose_action(rx, ry, method)
-        self.play(x,y,speed,act)
+        play_info = {
+            'act':act,
+            'x': x,
+            'y': y,
+            'speed': speed,
+        }
+        self.play(play_info)
             
             
 
 
-    def play(self, x, y, speed, action):
-        self.action_queue.put(action)
+    def play(self, play_info):
+        self.action_queue.put(play_info)
+        print('action', play_info['x'], play_info['y'])
         if not self.play_thread or not self.play_thread.is_alive():
-            self.play_thread = threading.Thread(target=play_thread_func2, daemon=True, args=(x, y, speed, self.action_queue, self.vx, self.vy))
+            self.play_thread = threading.Thread(target=play_thread_func2, daemon=True, args=(self.action_queue, self.vx, self.vy))
             self.play_thread.start()
     
 
@@ -328,15 +344,15 @@ if __name__ == '__main__':
     t.sleep(1)
     avgn = 0
     avgo = 0
-    for i in range(20):
-        t.sleep(0.2)
-        t1 = t.time()
-        mm.rotate_to(100,10,0.1)
-        t2 = t.time()
-        mm.play_thread.join()
-        t3 = t.time()
-        print('time',t2-t1, t3-t2)
 
+    mm.rotate_to(200,10,2)
+    t.sleep(0.5)
+    #t.sleep(3)
+    print('go')
+    mm.rotate_to(0,-10,2)
+    t.sleep(2)
+    print('done?')
+    t.sleep(5)
 '''
 ACTION_BLENDING = 0.3
 def destination(action):

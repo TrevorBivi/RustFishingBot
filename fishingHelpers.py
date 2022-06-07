@@ -34,6 +34,7 @@ templates = {
 'bone': get_template('bone.png'),
 'fullrod': get_template('fullrod.png',cv2.IMREAD_UNCHANGED)
 }
+print('------------------------------------LOADING TEMPLATES------------------------------------------')
 
 
 def slot_pos(x,y):
