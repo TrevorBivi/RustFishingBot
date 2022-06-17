@@ -72,6 +72,25 @@ class Line(object):
     def get_iter(self, speed=1, min_x = 0, max_x = SCREEN_SIZE[0], min_y = 0, max_y = SCREEN_SIZE[1]):
         return LineIter(self.p1, self.p2, speed, min_x, max_x, min_y, max_y)
 
+def line_intersection(line1, line2):
+    if type(line1) == Line:
+        line1 = line1.p1, line1.p2
+        line2 = line2.p1, line2.p2
+    xdiff = (line1[0][0] - line1[1][0], line2[0][0] - line2[1][0])
+    ydiff = (line1[0][1] - line1[1][1], line2[0][1] - line2[1][1])
+
+    def det(a, b):
+        return a[0] * b[1] - a[1] * b[0]
+
+    div = det(xdiff, ydiff)
+    if div == 0:
+       raise Exception('lines do not intersect')
+
+    d = (det(*line1), det(*line2))
+    x = det(d, xdiff) / div
+    y = det(d, ydiff) / div
+    return x, y
+
 
 def i_x(ratiox):
     return int(SCREEN_SIZE[0] * ratiox)
@@ -93,6 +112,9 @@ def r_p(intpos):
 
 def al(*lists):
     return tuple([sum(vals) for vals in zip(*lists)])
+
+def ml(list1, list2):
+    return list1[0] - list2[0], list1[1]-list2[1]
 
 MOUSEEVENTF_MOVE = 0x0001 
 def wm_mouse_move (x_pos, y_pos,flags=0):
@@ -162,94 +184,100 @@ def match_template(template, im=None,min_match=-1, box=None,error=False):
     return match[3],match[1]
 
 
+#ax = m.atan2(X,Z) + th[1]
+#ay = -(m.atan2(Y,Z) + th[0])
+#return e[0] + e[2] * ax, e[1] + e[2] * ay
+
+'''dr1 = np.array([
+    (1,0,0),
+    (0,c_(x), s_(x)),
+    (0,s_(x), c_(x))
+])
+
+dr2 = np.array([
+    (c_(y), 0, -s_(y)),
+    (0, 1, 0),
+    (s_(y),0, c_(x)) #+c ?
+])
+
+dr3 = np.array([
+    (c_(z), s_(z), 0),
+    (-s_(z), c_(z), 0),
+    (0,0, 1) #+c ?
+])
+da = np.array(a)
+dc = np.array(c)
+
+dm = np.dot( np.multiply( np.multiply( dr1, dr2), dr3), da-dc )'''
+#dm = dr1.cross(dr2).cross(dr3).dot(da-dc)
+#print('DM',dm)
+
+
+'''print('d')
+print([
+        [ c_(y)*( s_(z)*Y + c_(z)*X), - s_(y)*Z],
+        [s_(x)*(c_(y)*Z + s_(y)*( s_(z)*Y + c_(z)*X)), c_(x)*( c_(z)*Y - s_(z)*X)],
+        [c_(x)*(c_(y)*Z + s_(y)*( s_(z)*Y + c_(z)*X)), - s_(x)*( c_(z)*Y - s_(z)*X)]
+    ])'''
+#d = dm
+#print(d)
+'''d = [
+        'c_(y)'*( s_(z)*Y + c_(z)*X) - 's_(y)'*Z,
+        s_(x)*('c_(y)'*Z + 's_(y)'*( s_(z)*Y + c_(z)*X)) + c_(x)*( c_(z)*Y - s_(z)*X),
+        c_(x)*(c_(y)*Z + 's_(y)'*( s_(z)*Y + c_(z)*X)) - s_(x)*( c_(z)*Y - s_(z)*X)
+    ]'''
+#d = dm
+
 #FISH_LEFT_P1 = (-1.6, 0, 2.3)#(-2.3, 0, 6.1)
 FISH_LEFT_P2 = (-0.3, 0, 0.5)#(0.3, 0, 6.1)
 
 FOV = 90
-PLAYER = (0,1.5,0)
+PLAYER = (-0.09,1.53,0.19)
 rotation = (0,0,0) # * FOV/2
-display_surface = (SCREEN_SIZE[0]/2,SCREEN_SIZE[1]/2, SCREEN_SIZE[0]/2 * 90/108 * 0.95 )# (SCREEN_SIZE[0]/2,SCREEN_SIZE[1]/2, 1) #SCREEN_SIZE[0] / FOV
+display_surface = (SCREEN_SIZE[0]/2,SCREEN_SIZE[1]/2, SCREEN_SIZE[1]/2 * 44/45 )# (SCREEN_SIZE[0]/2,SCREEN_SIZE[1]/2, 1) #SCREEN_SIZE[0] / FOV
 def persp_proj(pnt, rotation=rotation, player=PLAYER, e=display_surface):
-    
-    # a =  #(6.5,-1.5,-2.5)
-    a = pnt
-    c = player
-    th = rotation[0]+ m.radians(17.3) , rotation[1]- 1*m.radians(20.5),0#rotation[1]- 1*m.radians(20.9) ,0 
+    c_x = m.cos(rotation[0])
+    c_y = m.cos(rotation[1])
+    s_x = m.sin(rotation[0])
+    s_y = m.sin(rotation[1])
 
-    def c_(i):
-        return m.cos(th[i])
+    X = pnt[0] - player[0]
+    Y = pnt[1] - player[1]
+    Z = pnt[2] - player[2]
 
-    def s_(i):
-        return m.sin(th[i])
-
-    X = a[0] - c[0]
-    Y = a[1] - c[1]
-    Z = a[2] - c[2]
-
-    x = 0
-    y = 1
-    z = 2
-
-    
-    #ax = m.atan2(X,Z) + th[1]
-    #ay = -(m.atan2(Y,Z) + th[0])
-    #return e[0] + e[2] * ax, e[1] + e[2] * ay
-
-    '''dr1 = np.array([
-        (1,0,0),
-        (0,c_(x), s_(x)),
-        (0,s_(x), c_(x))
-    ])
-
-    dr2 = np.array([
-        (c_(y), 0, -s_(y)),
-        (0, 1, 0),
-        (s_(y),0, c_(x)) #+c ?
-    ])
-
-    dr3 = np.array([
-        (c_(z), s_(z), 0),
-        (-s_(z), c_(z), 0),
-        (0,0, 1) #+c ?
-    ])
-    da = np.array(a)
-    dc = np.array(c)
-
-    dm = np.multiply( np.multiply( np.multiply( dr1, dr2), dr3), da-dc )
-    #dm = dr1.cross(dr2).cross(dr3).dot(da-dc)
-    print('DM',dm)'''
-    
-
-    '''print('d')
-    print([
-           [ c_(y)*( s_(z)*Y + c_(z)*X), - s_(y)*Z],
-            [s_(x)*(c_(y)*Z + s_(y)*( s_(z)*Y + c_(z)*X)), c_(x)*( c_(z)*Y - s_(z)*X)],
-            [c_(x)*(c_(y)*Z + s_(y)*( s_(z)*Y + c_(z)*X)), - s_(x)*( c_(z)*Y - s_(z)*X)]
-        ])'''
-    
     d = [
-            ###     
-            #c_(y)*( s_(z)*Y + c_(z)*X) - s_(y)*Z,
-            c_(y)*(c_(z)*X) - s_(y)*Z,
-            #      ##         ## 
-            #s_(x)*(c_(y)*Z + s_(y)*( s_(z)*Y + c_(z)*X)) + c_(x)*( c_(z)*Y - s_(z)*X),
-            s_(x)*(c_(y)*Z + s_(y)*( s_(z)*Y + X)) + c_(x)*(Y),
-            #       ##        ##                
-            #c_(x)*(c_(y)*Z + s_(y)*( s_(z)*Y + c_(z)*X)) - s_(x)*( c_(z)*Y - s_(z)*X)
-            c_(x)*(c_(y)*Z + s_(y)*(X)) - s_(x)*(Y)
+            c_y*X - s_y*Z,
+            s_x*(c_y*Z + s_y*X) + c_x*Y,
+            c_x*(c_y*Z + s_y*X) - s_x*Y
         ]
 
-    '''d = [
-            'c_(y)'*( s_(z)*Y + c_(z)*X) - 's_(y)'*Z,
-            s_(x)*('c_(y)'*Z + 's_(y)'*( s_(z)*Y + c_(z)*X)) + c_(x)*( c_(z)*Y - s_(z)*X),
-            c_(x)*(c_(y)*Z + 's_(y)'*( s_(z)*Y + c_(z)*X)) - s_(x)*( c_(z)*Y - s_(z)*X)
-        ]'''
-    #d = dm
-    bx = e[z]/d[z] * d[x] + e[x]
-    by = -(e[z]/d[z] * d[y]) + e[y]
-    #print('b\n', bx,by)
+    bx = e[2]/d[2] * d[0] + e[0]
+    by = -(e[2]/d[2] * d[1]) + e[1]
+
     return int(bx),int(by)
 
+def persp_pnt(bx, by, rotation=rotation, height=0, player=PLAYER, e=display_surface):
+    s_x = m.sin(rotation[0])
+    c_x = m.cos(rotation[0])
+    s_y = m.sin(rotation[1])
+    c_y = m.cos(rotation[1])
+
+    cn_x = (bx - e[0])/e[2]
+    cn_y = (by - e[1])/e[2]
+
+    x1 = cn_x * s_y * c_x - c_y
+    z1 = cn_x * c_y * c_x + s_y
+    y1 = -cn_x * s_x
+
+    x2 = cn_y * s_y * c_x + s_x * s_y
+    z2 = cn_y * c_x * c_y +  s_x * c_y
+    y2 = -cn_y * s_x + c_x
+
+    Y = -player[1] - height
+    Z = Y*(y1/x1-y2/x2)/(z2/x2-z1/x1)
+    X = Y*(y1/z1-y2/z2)/(x2/z2-x1/z1)
+
+    return X + player[0], height, Z + player[2]
 
 def weak_proj(pnt, rotation,player=(0,1.5,0), pxperdeg= 2560/108):
     X = pnt[0] - player[0]
@@ -262,3 +290,7 @@ def weak_proj(pnt, rotation,player=(0,1.5,0), pxperdeg= 2560/108):
     ret = int(rx * pxperdeg) + SCREEN_SIZE[0]//2, - int(ry*pxperdeg) + SCREEN_SIZE[1]//2
     print( int(rx * pxperdeg), int(ry*pxperdeg), 'ret=',ret )
     return ret
+
+
+#if __name__ == '__main__':
+#    persp_pnt()

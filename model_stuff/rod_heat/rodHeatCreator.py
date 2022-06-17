@@ -27,69 +27,129 @@ rec_lens = []
 
 POINTS_LEN = 9
 CUT_TIME = 4.4
-TRAIN_PERC = 0.93
+TRAIN_PERC = 0.98
 
 inp_datas = []
 out_datas = []
-seshs = []
-with open(PROJ_PATH + 'dbg\\snapUsed2.txt', 'r') as ff:
+seshs = {}
+with open(PROJ_PATH + 'dbg\\snapsv3.txt', 'r') as ff:
     dat = ff.read()
     for s in dat.split('\n'):
         if len(s) > 16:
-            sesh = json.loads(s)[1]
+            obj = json.loads(s)
+            sesh = obj[1]
             if len(sesh) < 16:
                 print("BAD SESH")
                 continue
-            seshs.append(sesh)
+            for dat in sesh:
+                if 'xy' in dat and type(dat['xy'][0]) == list:
+                    dat['xy'] = dat['xy'][0]
+            seshs[obj[0]] = sesh
 
-r.shuffle(seshs)
+#r.shuffle(seshs)
 test_train_split = round(len(seshs) * TRAIN_PERC)
 
 
-def get_frames(sesh_list):
+
+
+def get_frames(sesh_dict):
     datas = []
     outs = []
-    for sesh in sesh_list:
+
+    start_heat = 0
+    avg_first = 0
+    avg_second = 0
+    smp_first = 0
+    smp_second = 0
+
+    for sesh_name, sesh in sesh_dict.items():
         if len(sesh) < POINTS_LEN + 6:
             continue
-        print(sesh[0])
-        start_time = sesh[0][2]
-        rec_end = sesh[-1][2]
+        #print(sesh[0])
+        start_i = 0
+        for sesh_i in range(1,len(sesh)):
+            if 'cl' in sesh[sesh_i-1].keys() and not 'cl' in sesh[sesh_i]:
+                start_i = sesh_i
+        if start_i != 0:
+            sesh = sesh[start_i:]
+        
+        new_sesh = []
+        for dat in sesh:
+            if 'xy' in dat:
+                new_sesh.append(dat)
+        sesh=new_sesh
+            
+        if len(sesh) < POINTS_LEN+2:
+            continue
+
+
+        start_time = sesh[0]['tm']
+        rec_end = sesh[-1]['tm']
 
         end_index = None
         end_time = None
-        for pos_ind, pos in enumerate(sesh):
-            if pos[2] > rec_end - CUT_TIME:
+        for pos_ind, dat in enumerate(sesh):
+            if dat['tm'] > rec_end - CUT_TIME:
                 end_index = pos_ind
-                end_time = sesh[pos_ind][2]
+                end_time = sesh[pos_ind]['tm']
                 break
         else:
             continue
 
+
+        if start_i != 0:
+            smp_second += 1
+            avg_second += end_time - start_time
+            if end_time - start_time < 2.4:
+                start_heat = min(20, 30 * (2.4 - (end_time - start_time)) )
+                print('TIME',sesh_name,end_time - start_time, start_heat)
+        else:
+            smp_first += 1
+            avg_first += end_time - start_time
+
+
         for pos_ind in range(POINTS_LEN, end_index):
-            frame = [sesh[pos_ind][0] - 1760, sesh[pos_ind][1] - 880, sesh[pos_ind][2] - start_time]
+            frame = [sesh[pos_ind]['xy'][0] - 1760, sesh[pos_ind]['xy'][1] - 880, sesh[pos_ind]['tm'] - start_time]
             for samp_ind in range(0, POINTS_LEN, 1):
                 samp = sesh[pos_ind -samp_ind-1]
                 next_samp = sesh[pos_ind -samp_ind]
-                dx = next_samp[0] - samp[0]
-                dy = next_samp[1] - samp[1]
-                dt = next_samp[2] - samp[2]
+                dx = next_samp['xy'][0] - samp['xy'][0]
+                dy = next_samp['xy'][1] - samp['xy'][1]
+                dt = next_samp['tm'] - samp['tm']
                 frame.append(dx)
                 frame.append(dy)
                 frame.append(dt)
             datas.append(frame)
-            outs.append(100 * (sesh[pos_ind][2] - start_time) / (end_time - start_time))
+            outs.append(start_heat + (100-start_heat) * (sesh[pos_ind]['tm'] - start_time) / (end_time - start_time))
 
     c = list(zip(datas, outs))
     r.shuffle(c)
     datas, outs = zip(*c)
-
+    print('ANVERAGE!!!!!!!!!!!!!!',avg_first/smp_first, avg_second/smp_second)
     return datas, outs
 
+sesh_names = list(seshs.keys())
+r.shuffle(sesh_names)
+train_amnt = round(TRAIN_PERC * len(sesh_names))
+train_sesh_names = sesh_names[:train_amnt]
+test_sesh_names = sesh_names[train_amnt:]
+
+train_seshs = {}
+for name in train_sesh_names:
+    train_seshs[name] = seshs[name]
+
+test_seshs = {}
+for name in test_sesh_names:
+    test_seshs[name] = seshs[name]
 
 
-train_data, train_out = get_frames(seshs[:test_train_split])
-test_data, test_out = get_frames(seshs[test_train_split:])
+
+train_data, train_out = get_frames(train_seshs)
+
+print('TRAIN OUT', len(train_out))
+test_data, test_out = get_frames(test_seshs)
+
+
 
 #print( [i for i in zip(train_data, train_out)][:10])
 #raise Exception('stop')
@@ -106,29 +166,43 @@ model = Sequential()
 model.add(Dense(POINTS_LEN * 3 + 3, input_dim=(POINTS_LEN * 3 + 3), activation='relu'))
 #model.add(BatchNormalization())
 #model.add(Dense((POINTS_LEN + 1)*2, activation='relu'))
-model.add(Dropout(0.1))
+model.add(Dropout(0.14))
 model.add(Dense((POINTS_LEN * 3 + 3), activation='relu'))
-model.add(Dropout(0.1))
+model.add(Dropout(0.14))
 model.add(Dense(8, activation='relu'))
-model.add(Dropout(0.05))
+model.add(Dropout(0.08))
 model.add(Dense(1, activation='relu'))
 
 optimizer = Adam(
     learning_rate=0.00075,
 )
 
-model.compile(loss='mean_squared_error', optimizer=optimizer, metrics=['accuracy'])
+model.compile(loss='mean_squared_error', optimizer=optimizer)
 
 
-model.fit(train_data, train_out, epochs=120, batch_size=50, verbose=2)
+model.fit(train_data, train_out, epochs=190, batch_size=50, verbose=2)
 model.evaluate(test_data, test_out)
 #712
 #600
 #492 2?
 #553 4
-model.save(".\\model_stuff\\rod_heat\\rod_heat_model_5", save_format='h5')
+path = ".\\model_stuff\\rod_heat\\"
+name = input('name>')
 
+numpy_layers = []
 
+for layer in model.layers:
+    conf = layer.get_config()
+    
+    if 'activation' in conf:
+        numpy_layers.append(layer.get_weights())
+
+with open(path+name+'.pickle', 'wb+') as handle:
+    pickle.dump(numpy_layers, handle)
+
+model.save(path+name, save_format='h5')
+
+raise Exception('stop')
 '''
 # make class predictions with the model
 predictions = model.predict(test_data)#(model.predict(inp_datas) > 0.5).astype(int)

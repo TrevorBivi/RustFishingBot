@@ -272,7 +272,7 @@ class Mouse(object):
 
     def play(self, play_info):
         self.action_queue.put(play_info)
-        print('action', play_info['x'], play_info['y'])
+        #print('action', play_info['x'], play_info['y'])
         if not self.play_thread or not self.play_thread.is_alive():
             self.play_thread = threading.Thread(target=play_thread_func2, daemon=True, args=(self.action_queue, self.vx, self.vy))
             self.play_thread.start()
